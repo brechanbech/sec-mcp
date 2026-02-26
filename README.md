@@ -1,29 +1,65 @@
 # sec-mcp
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) server written in Rust that exposes SEC EDGAR data as tools for Claude Desktop.
+A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude Desktop access to SEC EDGAR data — company filings, financial statements, and company info. No API key needed.
 
-No API key required — the SEC EDGAR APIs are free and public.
+## Install
 
-## Tools
+### Option 1: Download a prebuilt binary (no Rust required)
+
+1. Download the latest binary for your Mac from the [Releases](https://codeberg.org/brechanbech/sec-mcp/releases) page:
+   - `sec-mcp-aarch64-apple-darwin` — Apple Silicon (M1/M2/M3/M4)
+   - `sec-mcp-x86_64-apple-darwin` — Intel
+
+2. Make it executable and move it into your PATH:
+```zsh
+   chmod +x sec-mcp-aarch64-apple-darwin
+   sudo mv sec-mcp-aarch64-apple-darwin /usr/local/bin/sec-mcp
+```
+
+### Option 2: Install with Cargo
+
+If you have [Rust](https://rustup.rs) installed:
+```zsh
+cargo install sec-mcp
+```
+
+## Configure Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "sec-edgar": {
+      "command": "sec-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Restart Claude Desktop.
+
+## First use
+
+On your first SEC-related request Claude will explain that a contact email is required by the [SEC EDGAR fair-access policy](https://www.sec.gov/os/accessing-edgar-data) and ask your permission before proceeding. Your email is stored locally in `~/Library/Application Support/sec-mcp/config.toml` and is only used in the HTTP User-Agent header sent to the SEC — it is not shared anywhere else.
+
+## Example prompts
+
+- *"What are Apple's recent SEC filings?"*
+- *"Show me Tesla's annual revenue for the last 5 years"*
+- *"What was Microsoft's net income last quarter?"*
+- *"What industry is NVDA in according to the SEC?"*
+- *"Show me Amazon's most recent 10-K filing"*
+
+## Available tools
 
 | Tool | Description |
 |------|-------------|
-| `sec_configure` | **First-run setup** — saves your contact email to `~/.config/sec-mcp/config.toml` |
+| `sec_configure` | First-run setup — saves your contact email |
 | `sec_lookup_cik` | Resolve a ticker symbol to its SEC CIK number |
 | `sec_company_info` | SIC code, industry, state of incorporation, fiscal year end, addresses |
 | `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs |
 | `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) |
-
-## First-run behaviour
-
-The SEC [fair-access policy](https://www.sec.gov/os/accessing-edgar-data) requires automated clients to include a contact address in the HTTP `User-Agent` header. On first use Claude will:
-
-1. Notice that no email is configured (the `sec_configure` tool description signals this).
-2. Explain why the email is needed and ask for your permission.
-3. Call `sec_configure` with the email you provide.
-4. Save it to `~/.config/sec-mcp/config.toml` — it persists across restarts.
-
-From then on Claude goes straight to fetching data. You can update the email at any time by asking Claude to reconfigure.
 
 ## Common XBRL concepts for `sec_financial_concept`
 
@@ -40,32 +76,6 @@ From then on Claude goes straight to fetching data. You can update the email at 
 | `CashAndCashEquivalentsAtCarryingValue` | Cash and equivalents |
 | `CommonStockSharesOutstanding` | Shares outstanding |
 
-## Install
-```zsh
-cargo install sec-mcp
-```
+## License
 
-Or download a prebuilt macOS binary from the [Releases](https://codeberg.org/brechanbech/sec-mcp/releases) page.
-
-## Configure Claude Desktop
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "sec-edgar": {
-      "command": "/Users/YOUR_USERNAME/.cargo/bin/sec-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-Restart Claude Desktop. On your first SEC-related request Claude will ask for your email before proceeding.
-
-## Logging
-
-Logs go to stderr (not stdout, which is reserved for MCP JSON-RPC). To enable debug output:
-```zsh
-RUST_LOG=sec_mcp=debug sec-mcp
-```
+MIT OR Apache-2.0
