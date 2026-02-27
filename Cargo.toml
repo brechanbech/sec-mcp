@@ -1,6 +1,6 @@
 [package]
 name = "sec-mcp"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Stefan Ractliffe"]
 description = "MCP server for SEC EDGAR data — company filings, financial concepts, and company info via Claude Desktop"

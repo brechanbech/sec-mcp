@@ -63,7 +63,7 @@ struct EdgarClient {
 
 impl EdgarClient {
     fn new(contact_email: &str) -> Result<Self> {
-        let user_agent = format!("sec-mcp/0.1 (contact: {contact_email})");
+        let user_agent = format!("sec-mcp/0.2 (contact: {contact_email})");
         let http = reqwest::Client::builder()
             .user_agent(user_agent)
             .build()
@@ -97,6 +97,32 @@ impl EdgarClient {
     async fn company_concept(&self, cik: &str, taxonomy: &str, concept: &str) -> Result<Value> {
         let url = format!(
             "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/{taxonomy}/{concept}.json"
+        );
+        let val: Value = self.http.get(&url).send().await?.json().await?;
+        Ok(val)
+    }
+
+    async fn list_tickers(&self) -> Result<Value> {
+        let url = "https://www.sec.gov/files/company_tickers_exchange.json";
+        let val: Value = self.http.get(url).send().await?.json().await?;
+        Ok(val)
+    }
+
+    async fn company_facts(&self, cik: &str) -> Result<Value> {
+        let url = format!("https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json");
+        let val: Value = self.http.get(&url).send().await?.json().await?;
+        Ok(val)
+    }
+
+    async fn xbrl_frames(
+        &self,
+        taxonomy: &str,
+        concept: &str,
+        unit: &str,
+        period: &str,
+    ) -> Result<Value> {
+        let url = format!(
+            "https://data.sec.gov/api/xbrl/frames/{taxonomy}/{concept}/{unit}/CY{period}.json"
         );
         let val: Value = self.http.get(&url).send().await?.json().await?;
         Ok(val)
@@ -216,6 +242,43 @@ fn tool_list(configured: bool) -> Value {
                     },
                     "required": ["ticker"]
                 }
+            },
+            {
+                "name": "sec_list_tickers",
+                "description": "List all active SEC-registered tickers with exchange info, optionally filtered by search query. Useful for finding a company's ticker symbol or seeing what's listed on a particular exchange.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": { "type": "string", "description": "Optional filter: match against ticker or company name (case-insensitive substring)" }
+                    }
+                }
+            },
+            {
+                "name": "sec_company_facts",
+                "description": "Get all available XBRL financial facts for a company — useful for discovering what concepts (metrics) a company reports before querying specific values with sec_financial_concept.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "ticker": { "type": "string", "description": "Stock ticker symbol" },
+                        "taxonomy": { "type": "string", "description": "Taxonomy to list: 'us-gaap' (default), 'ifrs-full', 'dei', or omit to list all", "default": "us-gaap" }
+                    },
+                    "required": ["ticker"]
+                }
+            },
+            {
+                "name": "sec_xbrl_frames",
+                "description": "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns top entries sorted by value.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "concept": { "type": "string", "description": "XBRL concept name, e.g. 'Revenues', 'NetIncomeLoss', 'Assets'" },
+                        "period": { "type": "string", "description": "Period: year like '2024', or quarter like '2024Q1'" },
+                        "taxonomy": { "type": "string", "description": "Taxonomy: 'us-gaap' (default) or 'ifrs-full'", "default": "us-gaap" },
+                        "unit": { "type": "string", "description": "Unit: 'USD' (default), 'pure', 'shares', etc.", "default": "USD" },
+                        "limit": { "type": "integer", "description": "Number of top entries to return (default 20)", "default": 20 }
+                    },
+                    "required": ["concept", "period"]
+                }
             }
         ]
     })
@@ -250,7 +313,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                     .unwrap_or_else(|_| "unknown".into()),
                 "message": format!(
                     "SEC EDGAR contact email saved. \
-                     All requests will now identify as: sec-mcp/0.1 (contact: {email})"
+                     All requests will now identify as: sec-mcp/0.2 (contact: {email})"
                 )
             }))
         }
@@ -436,6 +499,160 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             }))
         }
 
+        "sec_list_tickers" => {
+            let data;
+            {
+                let s = state.read().await;
+                let client = s.client()?;
+                data = client.list_tickers().await?;
+            }
+
+            let query = args["query"].as_str().map(|s| s.to_lowercase());
+            let fields = data["fields"].as_array();
+            let rows = data["data"].as_array();
+
+            let results: Vec<Value> = match rows {
+                Some(rows) => rows
+                    .iter()
+                    .filter(|row| {
+                        let row = match row.as_array() {
+                            Some(r) => r,
+                            None => return false,
+                        };
+                        if let Some(ref q) = query {
+                            let name = row.get(1).and_then(|v| v.as_str()).unwrap_or("");
+                            let ticker = row.get(2).and_then(|v| v.as_str()).unwrap_or("");
+                            name.to_lowercase().contains(q)
+                                || ticker.to_lowercase().contains(q)
+                        } else {
+                            true
+                        }
+                    })
+                    .take(50)
+                    .map(|row| {
+                        let row = row.as_array().unwrap();
+                        json!({
+                            "cik": row.get(0).cloned().unwrap_or(Value::Null),
+                            "name": row.get(1).cloned().unwrap_or(Value::Null),
+                            "ticker": row.get(2).cloned().unwrap_or(Value::Null),
+                            "exchange": row.get(3).cloned().unwrap_or(Value::Null),
+                        })
+                    })
+                    .collect(),
+                None => vec![],
+            };
+
+            let total = rows.map(|r| r.len()).unwrap_or(0);
+            let _ = fields; // consumed for documentation; we know the column order
+
+            Ok(json!({
+                "total_tickers": total,
+                "returned": results.len(),
+                "query": query.as_deref().unwrap_or("(none)"),
+                "data": results
+            }))
+        }
+
+        "sec_company_facts" => {
+            let ticker;
+            let taxonomy_filter;
+            let cik;
+            let data;
+            {
+                let s = state.read().await;
+                let client = s.client()?;
+                ticker = args["ticker"]
+                    .as_str()
+                    .context("ticker required")?
+                    .to_string();
+                taxonomy_filter = args["taxonomy"].as_str().map(|s| s.to_string());
+                cik = client.cik_for_ticker(&ticker).await?;
+                data = client.company_facts(&cik).await?;
+            }
+
+            let entity = data["entityName"].as_str().unwrap_or("Unknown").to_string();
+            let facts = data["facts"].as_object();
+
+            let mut taxonomies = json!({});
+
+            if let Some(facts_map) = facts {
+                for (tax_name, concepts_val) in facts_map {
+                    if let Some(ref filter) = taxonomy_filter {
+                        if tax_name != filter {
+                            continue;
+                        }
+                    }
+                    if let Some(concepts) = concepts_val.as_object() {
+                        let concept_list: Vec<Value> = concepts
+                            .iter()
+                            .map(|(concept_name, concept_data)| {
+                                json!({
+                                    "concept": concept_name,
+                                    "label": concept_data["label"].as_str().unwrap_or(concept_name),
+                                    "description": concept_data["description"].as_str().unwrap_or(""),
+                                })
+                            })
+                            .collect();
+                        taxonomies[tax_name] = json!(concept_list);
+                    }
+                }
+            }
+
+            Ok(json!({
+                "company": entity,
+                "ticker": ticker.to_uppercase(),
+                "cik": cik,
+                "taxonomies": taxonomies
+            }))
+        }
+
+        "sec_xbrl_frames" => {
+            let concept;
+            let period;
+            let taxonomy;
+            let unit;
+            let limit;
+            let data;
+            {
+                let s = state.read().await;
+                let client = s.client()?;
+                concept = args["concept"]
+                    .as_str()
+                    .context("concept required")?
+                    .to_string();
+                period = args["period"]
+                    .as_str()
+                    .context("period required")?
+                    .to_string();
+                taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
+                unit = args["unit"].as_str().unwrap_or("USD").to_string();
+                limit = args["limit"].as_u64().unwrap_or(20) as usize;
+                data = client.xbrl_frames(&taxonomy, &concept, &unit, &period).await?;
+            }
+
+            let mut entries: Vec<Value> = data["data"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+
+            entries.sort_by(|a, b| {
+                let va = a["val"].as_f64().unwrap_or(0.0);
+                let vb = b["val"].as_f64().unwrap_or(0.0);
+                vb.partial_cmp(&va).unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let top: Vec<Value> = entries.into_iter().take(limit).collect();
+
+            Ok(json!({
+                "concept": concept,
+                "taxonomy": taxonomy,
+                "unit": unit,
+                "period": period,
+                "count": top.len(),
+                "data": top
+            }))
+        }
+
         _ => anyhow::bail!("unknown tool: {}", name),
     }
 }
@@ -503,7 +720,7 @@ async fn dispatch(state: &Arc<RwLock<State>>, req: Request) -> Option<Response> 
             json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": { "tools": {} },
-                "serverInfo": { "name": "sec-mcp", "version": "0.1.0" }
+                "serverInfo": { "name": "sec-mcp", "version": "0.2.0" }
             }),
         ),
 

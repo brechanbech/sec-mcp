@@ -50,6 +50,9 @@ On your first SEC-related request Claude will explain that a contact email is re
 - *"What was Microsoft's net income last quarter?"*
 - *"What industry is NVDA in according to the SEC?"*
 - *"Show me Amazon's most recent 10-K filing"*
+- *"What tickers are listed on NYSE with 'energy' in the name?"*
+- *"What financial metrics does Apple report to the SEC?"*
+- *"Which companies had the highest revenue in 2024?"*
 
 ## Available tools
 
@@ -60,6 +63,9 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_company_info` | SIC code, industry, state of incorporation, fiscal year end, addresses |
 | `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs |
 | `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) |
+| `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info |
+| `sec_company_facts` | Discover all XBRL concepts (metrics) a company reports |
+| `sec_xbrl_frames` | Cross-company comparison of a financial metric for a given period |
 
 ## Common XBRL concepts for `sec_financial_concept`
 
