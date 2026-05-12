@@ -2,6 +2,22 @@
 
 A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude Desktop access to SEC EDGAR data — company filings, financial statements, and company info. No API key needed.
 
+## Why an MCP for this?
+
+EDGAR is a set of public REST endpoints with no API key, and the documentation at [sec.gov/search-filings/edgar-application-programming-interfaces](https://www.sec.gov/search-filings/edgar-application-programming-interfaces) is reasonable. So strictly speaking, an MCP isn't needed. What this wrapper buys you:
+
+1. **Persistent User-Agent identity.** SEC's fair-access policy requires a contact email in the User-Agent header; without one, requests get throttled or rejected. You don't want to re-paste your email into every prompt. The MCP stores it in a config file and stamps every request.
+
+2. **Ticker → CIK resolution with caching.** Every EDGAR endpoint is keyed by a zero-padded 10-digit CIK, not by ticker. Without a tool, each query would re-fetch the ~1 MB `company_tickers.json` and parse it from scratch. The MCP caches it for an hour.
+
+3. **URL-construction quirks the docs are quiet about.** The `CY{period}` prefix on the XBRL frames endpoint, the trailing `I` for instant concepts, the zero-padded CIK, the dash-stripped accession number in archive URLs. Easy to get wrong on the fly; encoded once in the tool.
+
+4. **Response shaping.** `companyfacts` responses are tens of MB and `filings.recent` is laid out as column-major parallel arrays. Both are usable, but a language model would burn a lot of context reformatting them. The MCP returns trimmed, row-shaped JSON.
+
+5. **Discovery.** With the MCP installed, the tool list itself tells Claude that it can query SEC filings, plus the common concept names. Without it, the model has to remember the endpoints exist.
+
+If you only pull one or two filings a year, you don't need this — just give Claude the URL. At any higher volume, the wrapper pays for itself by turning "explain the URL grammar in every conversation" into "ask a natural question."
+
 ## Install
 
 ### Option 1: Download a prebuilt binary (no Rust required)
