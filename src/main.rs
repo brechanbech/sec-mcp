@@ -1,12 +1,15 @@
 //! SEC EDGAR MCP Server
 //!
-//! Exposes SEC EDGAR API data as MCP tools for Claude Desktop.
-//! Communicates over stdio using the MCP JSON-RPC protocol.
+//! Exposes SEC EDGAR API data as MCP tools over stdio using the MCP JSON-RPC
+//! protocol.
 //!
-//! On first use of any data tool, Claude will call `sec_configure` to ask the
-//! user for their contact email. This is required by the SEC EDGAR fair-access
-//! policy (https://www.sec.gov/os/accessing-edgar-data). The email is stored
-//! in ~/.config/sec-mcp/config.toml and used as the HTTP User-Agent contact.
+//! On first use of any data tool, the client will call `sec_configure` to ask
+//! the user for their contact email. This is required by the SEC EDGAR
+//! fair-access policy (https://www.sec.gov/os/accessing-edgar-data). The email
+//! is stored in the platform config directory (e.g.
+//! `~/Library/Application Support/sec-mcp/config.toml` on macOS,
+//! `~/.config/sec-mcp/config.toml` on Linux) and used as the HTTP User-Agent
+//! contact.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -14,9 +17,15 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
+
+const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+const TICKER_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
+const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -59,73 +68,126 @@ impl Config {
 
 struct EdgarClient {
     http: reqwest::Client,
+    ticker_cache: RwLock<Option<(Instant, HashMap<String, String>)>>,
 }
 
 impl EdgarClient {
     fn new(contact_email: &str) -> Result<Self> {
-        let user_agent = format!("sec-mcp/0.2 (contact: {contact_email})");
+        let user_agent = format!("sec-mcp/{SERVER_VERSION} (contact: {contact_email})");
         let http = reqwest::Client::builder()
             .user_agent(user_agent)
+            .timeout(HTTP_TIMEOUT)
             .build()
             .context("failed to build HTTP client")?;
-        Ok(Self { http })
+        Ok(Self {
+            http,
+            ticker_cache: RwLock::new(None),
+        })
     }
 
-    async fn cik_for_ticker(&self, ticker: &str) -> Result<String> {
-        let url = "https://www.sec.gov/files/company_tickers.json";
-        let map: HashMap<String, Value> = self.http.get(url).send().await?.json().await?;
+    async fn get_json(&self, url: &str) -> Result<Value> {
+        let resp = self
+            .http
+            .get(url)
+            .send()
+            .await
+            .with_context(|| format!("HTTP request failed: {url}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            let snippet: String = body.chars().take(200).collect();
+            match status.as_u16() {
+                404 => anyhow::bail!("SEC EDGAR returned 404 (not found) for {url}"),
+                429 => anyhow::bail!(
+                    "SEC EDGAR rate limit exceeded (429). The fair-access limit is 10 req/sec; retry shortly."
+                ),
+                _ => anyhow::bail!("SEC EDGAR returned {status} for {url}: {snippet}"),
+            }
+        }
+        resp.json()
+            .await
+            .with_context(|| format!("failed to parse JSON response from {url}"))
+    }
 
-        let ticker_upper = ticker.to_uppercase();
-        for entry in map.values() {
-            if let Some(t) = entry.get("ticker").and_then(|v| v.as_str()) {
-                if t == ticker_upper {
-                    if let Some(cik) = entry.get("cik_str") {
-                        return Ok(format!("{:010}", cik.as_u64().unwrap_or(0)));
-                    }
+    async fn ticker_map(&self) -> Result<HashMap<String, String>> {
+        {
+            let guard = self.ticker_cache.read().await;
+            if let Some((fetched, map)) = guard.as_ref() {
+                if fetched.elapsed() < TICKER_CACHE_TTL {
+                    return Ok(map.clone());
                 }
             }
         }
-        anyhow::bail!("ticker '{}' not found in EDGAR", ticker)
+
+        let url = "https://www.sec.gov/files/company_tickers.json";
+        let raw: HashMap<String, Value> = self
+            .get_json(url)
+            .await?
+            .as_object()
+            .context("ticker file was not a JSON object")?
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        let mut map = HashMap::with_capacity(raw.len());
+        for entry in raw.values() {
+            let ticker = entry.get("ticker").and_then(|v| v.as_str());
+            let cik = entry.get("cik_str").and_then(|v| v.as_u64());
+            if let (Some(t), Some(c)) = (ticker, cik) {
+                map.insert(t.to_uppercase(), format!("{c:010}"));
+            }
+        }
+
+        let mut guard = self.ticker_cache.write().await;
+        *guard = Some((Instant::now(), map.clone()));
+        Ok(map)
+    }
+
+    async fn cik_for_ticker(&self, ticker: &str) -> Result<String> {
+        let upper = ticker.to_uppercase();
+        let map = self.ticker_map().await?;
+        map.get(&upper)
+            .cloned()
+            .with_context(|| format!("ticker '{ticker}' not found in EDGAR"))
     }
 
     async fn recent_filings(&self, cik: &str) -> Result<Value> {
         let url = format!("https://data.sec.gov/submissions/CIK{cik}.json");
-        let val: Value = self.http.get(&url).send().await?.json().await?;
-        Ok(val)
+        self.get_json(&url).await
     }
 
     async fn company_concept(&self, cik: &str, taxonomy: &str, concept: &str) -> Result<Value> {
         let url = format!(
             "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/{taxonomy}/{concept}.json"
         );
-        let val: Value = self.http.get(&url).send().await?.json().await?;
-        Ok(val)
+        self.get_json(&url).await
     }
 
     async fn list_tickers(&self) -> Result<Value> {
         let url = "https://www.sec.gov/files/company_tickers_exchange.json";
-        let val: Value = self.http.get(url).send().await?.json().await?;
-        Ok(val)
+        self.get_json(url).await
     }
 
     async fn company_facts(&self, cik: &str) -> Result<Value> {
         let url = format!("https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json");
-        let val: Value = self.http.get(&url).send().await?.json().await?;
-        Ok(val)
+        self.get_json(&url).await
     }
 
+    /// `period_code` must be the full SEC frames period code without the leading
+    /// `CY` (e.g. `2024`, `2024Q1`, `2024Q1I`). Instant concepts (Assets,
+    /// StockholdersEquity, etc.) require the trailing `I`; duration concepts
+    /// (Revenues, NetIncomeLoss, etc.) must not have it.
     async fn xbrl_frames(
         &self,
         taxonomy: &str,
         concept: &str,
         unit: &str,
-        period: &str,
+        period_code: &str,
     ) -> Result<Value> {
         let url = format!(
-            "https://data.sec.gov/api/xbrl/frames/{taxonomy}/{concept}/{unit}/CY{period}.json"
+            "https://data.sec.gov/api/xbrl/frames/{taxonomy}/{concept}/{unit}/CY{period_code}.json"
         );
-        let val: Value = self.http.get(&url).send().await?.json().await?;
-        Ok(val)
+        self.get_json(&url).await
     }
 }
 
@@ -133,7 +195,7 @@ impl EdgarClient {
 
 struct State {
     config: Config,
-    client: Option<EdgarClient>,
+    client: Option<Arc<EdgarClient>>,
 }
 
 impl State {
@@ -142,7 +204,8 @@ impl State {
         let client = config
             .contact_email
             .as_deref()
-            .and_then(|email| EdgarClient::new(email).ok());
+            .and_then(|email| EdgarClient::new(email).ok())
+            .map(Arc::new);
         Self { config, client }
     }
 
@@ -151,14 +214,14 @@ impl State {
     }
 
     fn set_email(&mut self, email: String) -> Result<()> {
-        self.client = Some(EdgarClient::new(&email)?);
+        self.client = Some(Arc::new(EdgarClient::new(&email)?));
         self.config.contact_email = Some(email);
         self.config.save()?;
         Ok(())
     }
 
-    fn client(&self) -> Result<&EdgarClient> {
-        self.client.as_ref().context(
+    fn client(&self) -> Result<Arc<EdgarClient>> {
+        self.client.clone().context(
             "SEC EDGAR contact email not configured. \
              Please call the sec_configure tool first.",
         )
@@ -267,12 +330,13 @@ fn tool_list(configured: bool) -> Value {
             },
             {
                 "name": "sec_xbrl_frames",
-                "description": "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns top entries sorted by value.",
+                "description": "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns top entries sorted by value. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "concept": { "type": "string", "description": "XBRL concept name, e.g. 'Revenues', 'NetIncomeLoss', 'Assets'" },
-                        "period": { "type": "string", "description": "Period: year like '2024', or quarter like '2024Q1'" },
+                        "period": { "type": "string", "description": "Period: year like '2024' (annual, duration concepts only), or quarter like '2024Q1'" },
+                        "instant": { "type": "boolean", "description": "Set true for instant/balance-sheet concepts measured at a point in time (must be combined with a quarterly period). Default false.", "default": false },
                         "taxonomy": { "type": "string", "description": "Taxonomy: 'us-gaap' (default) or 'ifrs-full'", "default": "us-gaap" },
                         "unit": { "type": "string", "description": "Unit: 'USD' (default), 'pure', 'shares', etc.", "default": "USD" },
                         "limit": { "type": "integer", "description": "Number of top entries to return (default 20)", "default": 20 }
@@ -295,8 +359,8 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .trim()
                 .to_string();
 
-            if !email.contains('@') || !email.contains('.') {
-                anyhow::bail!("'{}' does not look like a valid email address", email);
+            if email.is_empty() {
+                anyhow::bail!("contact_email cannot be empty");
             }
 
             let mut s = state.write().await;
@@ -313,14 +377,13 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                     .unwrap_or_else(|_| "unknown".into()),
                 "message": format!(
                     "SEC EDGAR contact email saved. \
-                     All requests will now identify as: sec-mcp/0.2 (contact: {email})"
+                     All requests will now identify as: sec-mcp/{SERVER_VERSION} (contact: {email})"
                 )
             }))
         }
 
         "sec_lookup_cik" => {
-            let s = state.read().await;
-            let client = s.client()?;
+            let client = state.read().await.client()?;
             let ticker = args["ticker"].as_str().context("ticker required")?;
             let cik = client.cik_for_ticker(ticker).await?;
             Ok(json!({
@@ -333,23 +396,15 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         }
 
         "sec_recent_filings" => {
-            let ticker;
-            let form_filter_owned;
-            let limit;
-            let cik;
-            let data;
-            {
-                let s = state.read().await;
-                let client = s.client()?;
-                ticker = args["ticker"]
-                    .as_str()
-                    .context("ticker required")?
-                    .to_string();
-                form_filter_owned = args["form_type"].as_str().map(|s| s.to_string());
-                limit = args["limit"].as_u64().unwrap_or(10).min(40) as usize;
-                cik = client.cik_for_ticker(&ticker).await?;
-                data = client.recent_filings(&cik).await?;
-            }
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            let form_filter_owned = args["form_type"].as_str().map(|s| s.to_string());
+            let limit = args["limit"].as_u64().unwrap_or(10).min(40) as usize;
+            let cik = client.cik_for_ticker(&ticker).await?;
+            let data = client.recent_filings(&cik).await?;
 
             let form_filter = form_filter_owned.as_deref();
             let company_name = data["name"].as_str().unwrap_or("Unknown").to_string();
@@ -403,28 +458,19 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         }
 
         "sec_financial_concept" => {
-            let ticker;
-            let concept;
-            let taxonomy;
-            let period_filter_owned;
-            let cik;
-            let data;
-            {
-                let s = state.read().await;
-                let client = s.client()?;
-                ticker = args["ticker"]
-                    .as_str()
-                    .context("ticker required")?
-                    .to_string();
-                concept = args["concept"]
-                    .as_str()
-                    .context("concept required")?
-                    .to_string();
-                taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
-                period_filter_owned = args["period"].as_str().map(|s| s.to_string());
-                cik = client.cik_for_ticker(&ticker).await?;
-                data = client.company_concept(&cik, &taxonomy, &concept).await?;
-            }
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            let concept = args["concept"]
+                .as_str()
+                .context("concept required")?
+                .to_string();
+            let taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
+            let period_filter_owned = args["period"].as_str().map(|s| s.to_string());
+            let cik = client.cik_for_ticker(&ticker).await?;
+            let data = client.company_concept(&cik, &taxonomy, &concept).await?;
 
             let period_filter = period_filter_owned.as_deref();
             let entity = data["entityName"].as_str().unwrap_or("Unknown").to_string();
@@ -467,19 +513,13 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         }
 
         "sec_company_info" => {
-            let ticker;
-            let cik;
-            let data;
-            {
-                let s = state.read().await;
-                let client = s.client()?;
-                ticker = args["ticker"]
-                    .as_str()
-                    .context("ticker required")?
-                    .to_string();
-                cik = client.cik_for_ticker(&ticker).await?;
-                data = client.recent_filings(&cik).await?;
-            }
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            let cik = client.cik_for_ticker(&ticker).await?;
+            let data = client.recent_filings(&cik).await?;
 
             Ok(json!({
                 "name": data["name"],
@@ -500,15 +540,10 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         }
 
         "sec_list_tickers" => {
-            let data;
-            {
-                let s = state.read().await;
-                let client = s.client()?;
-                data = client.list_tickers().await?;
-            }
+            let client = state.read().await.client()?;
+            let data = client.list_tickers().await?;
 
             let query = args["query"].as_str().map(|s| s.to_lowercase());
-            let fields = data["fields"].as_array();
             let rows = data["data"].as_array();
 
             let results: Vec<Value> = match rows {
@@ -543,7 +578,6 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             };
 
             let total = rows.map(|r| r.len()).unwrap_or(0);
-            let _ = fields; // consumed for documentation; we know the column order
 
             Ok(json!({
                 "total_tickers": total,
@@ -554,21 +588,14 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         }
 
         "sec_company_facts" => {
-            let ticker;
-            let taxonomy_filter;
-            let cik;
-            let data;
-            {
-                let s = state.read().await;
-                let client = s.client()?;
-                ticker = args["ticker"]
-                    .as_str()
-                    .context("ticker required")?
-                    .to_string();
-                taxonomy_filter = args["taxonomy"].as_str().map(|s| s.to_string());
-                cik = client.cik_for_ticker(&ticker).await?;
-                data = client.company_facts(&cik).await?;
-            }
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            let taxonomy_filter = args["taxonomy"].as_str().map(|s| s.to_string());
+            let cik = client.cik_for_ticker(&ticker).await?;
+            let data = client.company_facts(&cik).await?;
 
             let entity = data["entityName"].as_str().unwrap_or("Unknown").to_string();
             let facts = data["facts"].as_object();
@@ -607,28 +634,40 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         }
 
         "sec_xbrl_frames" => {
-            let concept;
-            let period;
-            let taxonomy;
-            let unit;
-            let limit;
-            let data;
-            {
-                let s = state.read().await;
-                let client = s.client()?;
-                concept = args["concept"]
-                    .as_str()
-                    .context("concept required")?
-                    .to_string();
-                period = args["period"]
-                    .as_str()
-                    .context("period required")?
-                    .to_string();
-                taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
-                unit = args["unit"].as_str().unwrap_or("USD").to_string();
-                limit = args["limit"].as_u64().unwrap_or(20) as usize;
-                data = client.xbrl_frames(&taxonomy, &concept, &unit, &period).await?;
+            let client = state.read().await.client()?;
+            let concept = args["concept"]
+                .as_str()
+                .context("concept required")?
+                .to_string();
+            let period_input = args["period"]
+                .as_str()
+                .context("period required")?
+                .trim()
+                .trim_start_matches("CY")
+                .trim_start_matches("cy")
+                .trim_end_matches('I')
+                .trim_end_matches('i')
+                .to_string();
+            let instant = args["instant"].as_bool().unwrap_or(false);
+            let taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
+            let unit = args["unit"].as_str().unwrap_or("USD").to_string();
+            let limit = args["limit"].as_u64().unwrap_or(20) as usize;
+
+            if instant && !period_input.contains('Q') {
+                anyhow::bail!(
+                    "instant=true requires a quarterly period (e.g. '2024Q1'); got '{period_input}'"
+                );
             }
+
+            let period_code = if instant {
+                format!("{period_input}I")
+            } else {
+                period_input.clone()
+            };
+
+            let data = client
+                .xbrl_frames(&taxonomy, &concept, &unit, &period_code)
+                .await?;
 
             let mut entries: Vec<Value> = data["data"]
                 .as_array()
@@ -647,7 +686,8 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 "concept": concept,
                 "taxonomy": taxonomy,
                 "unit": unit,
-                "period": period,
+                "period": period_code,
+                "instant": instant,
                 "count": top.len(),
                 "data": top
             }))
@@ -718,9 +758,9 @@ async fn dispatch(state: &Arc<RwLock<State>>, req: Request) -> Option<Response> 
         "initialize" => Response::ok(
             id,
             json!({
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": { "tools": {} },
-                "serverInfo": { "name": "sec-mcp", "version": "0.2.0" }
+                "serverInfo": { "name": "sec-mcp", "version": SERVER_VERSION }
             }),
         ),
 

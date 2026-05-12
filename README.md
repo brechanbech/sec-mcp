@@ -10,10 +10,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives C
    - `sec-mcp-aarch64-apple-darwin` — Apple Silicon (M1/M2/M3/M4)
    - `sec-mcp-x86_64-apple-darwin` — Intel
 
-2. Make it executable and move it into your PATH:
+2. Make it executable and move it into your PATH. Replace `<arch>` with either `aarch64` or `x86_64` to match the binary you downloaded:
 ```zsh
-   chmod +x sec-mcp-aarch64-apple-darwin
-   sudo mv sec-mcp-aarch64-apple-darwin /usr/local/bin/sec-mcp
+chmod +x sec-mcp-<arch>-apple-darwin
+sudo mv sec-mcp-<arch>-apple-darwin /usr/local/bin/sec-mcp
 ```
 
 ### Option 2: Install with Cargo
