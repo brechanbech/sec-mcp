@@ -77,7 +77,7 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_configure` | First-run setup — saves your contact email |
 | `sec_lookup_cik` | Resolve a ticker symbol to its SEC CIK number |
 | `sec_company_info` | SIC code, industry, state of incorporation, fiscal year end, addresses |
-| `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs |
+| `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs — pages into older history automatically when a form-type filter needs it |
 | `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) |
 | `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info |
 | `sec_company_facts` | Discover all XBRL concepts (metrics) a company reports |

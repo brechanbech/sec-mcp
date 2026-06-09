@@ -23,7 +23,14 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
-const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+/// The latest MCP protocol revision this server implements. Used as the
+/// fallback when the client requests a version we don't recognize.
+const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
+/// Protocol revisions this server is compatible with, newest first. During
+/// `initialize` we echo back the client's requested version if it appears
+/// here; otherwise we offer our latest (`MCP_PROTOCOL_VERSION`) and let the
+/// client decide whether to proceed.
+const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26"];
 const TICKER_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -156,6 +163,13 @@ impl EdgarClient {
         self.get_json(&url).await
     }
 
+    /// Fetch one of the older-history submission files named in
+    /// `filings.files[]` (e.g. `CIK0000320193-submissions-001.json`).
+    async fn submissions_file(&self, name: &str) -> Result<Value> {
+        let url = format!("https://data.sec.gov/submissions/{name}");
+        self.get_json(&url).await
+    }
+
     async fn company_concept(&self, cik: &str, taxonomy: &str, concept: &str) -> Result<Value> {
         let url = format!(
             "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/{taxonomy}/{concept}.json"
@@ -270,7 +284,7 @@ fn tool_list(configured: bool) -> Value {
             },
             {
                 "name": "sec_recent_filings",
-                "description": "Get recent SEC filings (10-K, 10-Q, 8-K, etc.) for a company by ticker symbol.",
+                "description": "Get recent SEC filings (10-K, 10-Q, 8-K, etc.) for a company by ticker symbol. Returns the most recent filings first. When a form_type filter is given, older history is paged in automatically if recent filings don't satisfy the requested limit.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -350,6 +364,60 @@ fn tool_list(configured: bool) -> Value {
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
 
+/// Append row-shaped filings from one column-major submissions block into
+/// `out`, honoring `form_filter`, until `out` reaches `limit`. The block is
+/// either `filings.recent` from the main submissions file or the top-level
+/// object of an older-history file — both share the same parallel-array layout.
+fn collect_filings(
+    block: &Value,
+    cik_num: &str,
+    form_filter: Option<&str>,
+    limit: usize,
+    out: &mut Vec<Value>,
+) {
+    let forms = match block["form"].as_array() {
+        Some(f) => f,
+        None => return,
+    };
+    let col = |key: &str| block[key].as_array();
+    let dates = col("filingDate");
+    let accs = col("accessionNumber");
+    let docs = col("primaryDocument");
+    let descs = col("primaryDocDescription");
+    let cell = |arr: Option<&Vec<Value>>, i: usize| {
+        arr.and_then(|a| a.get(i)).cloned().unwrap_or(Value::Null)
+    };
+
+    for (i, f) in forms.iter().enumerate() {
+        if out.len() >= limit {
+            return;
+        }
+        if let Some(ft) = form_filter {
+            if f.as_str().unwrap_or("") != ft {
+                continue;
+            }
+        }
+        let acc_raw = accs
+            .and_then(|a| a.get(i))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let acc_nodash = acc_raw.replace('-', "");
+        let doc = docs
+            .and_then(|a| a.get(i))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let url =
+            format!("https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{doc}");
+        out.push(json!({
+            "form": f,
+            "date": cell(dates, i),
+            "description": cell(descs, i),
+            "accession_number": acc_raw,
+            "url": url
+        }));
+    }
+}
+
 async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Result<Value> {
     match name {
         "sec_configure" => {
@@ -408,46 +476,44 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
             let form_filter = form_filter_owned.as_deref();
             let company_name = data["name"].as_str().unwrap_or("Unknown").to_string();
-            let recent = &data["filings"]["recent"];
-
-            let forms = recent["form"].as_array().cloned().unwrap_or_default();
-            let dates = recent["filingDate"].as_array().cloned().unwrap_or_default();
-            let accs = recent["accessionNumber"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
-            let docs = recent["primaryDocument"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
-            let descs = recent["primaryDocDescription"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
-
             let cik_num = cik.trim_start_matches('0').to_string();
 
-            let filings: Vec<Value> = forms
-                .iter()
-                .enumerate()
-                .filter(|(_, f)| form_filter.map_or(true, |ft| f.as_str().unwrap_or("") == ft))
-                .take(limit)
-                .map(|(i, f)| {
-                    let acc_raw = accs.get(i).and_then(|v| v.as_str()).unwrap_or("");
-                    let acc_nodash = acc_raw.replace('-', "");
-                    let doc = docs.get(i).and_then(|v| v.as_str()).unwrap_or("");
-                    let url = format!(
-                        "https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{doc}"
-                    );
-                    json!({
-                        "form": f,
-                        "date": dates.get(i).cloned().unwrap_or(Value::Null),
-                        "description": descs.get(i).cloned().unwrap_or(Value::Null),
-                        "accession_number": acc_raw,
-                        "url": url
-                    })
-                })
-                .collect();
+            // The main submissions file holds only the most recent ~1000
+            // filings in `filings.recent`. Start there; it satisfies the
+            // common case in a single request.
+            let mut filings: Vec<Value> = Vec::with_capacity(limit);
+            collect_filings(
+                &data["filings"]["recent"],
+                &cik_num,
+                form_filter,
+                limit,
+                &mut filings,
+            );
+
+            // If the recent window didn't fill the request — typically a
+            // `form_type` filter whose matches predate it — page back through
+            // the older-history files (listed newest-first) until we hit the
+            // limit or run out. Only fetched when actually needed.
+            let mut pages_fetched = 0usize;
+            if filings.len() < limit {
+                if let Some(files) = data["filings"]["files"].as_array() {
+                    for file in files {
+                        if filings.len() >= limit {
+                            break;
+                        }
+                        let Some(name) = file["name"].as_str() else {
+                            continue;
+                        };
+                        let older = client.submissions_file(name).await?;
+                        pages_fetched += 1;
+                        collect_filings(&older, &cik_num, form_filter, limit, &mut filings);
+                    }
+                }
+            }
+
+            if pages_fetched > 0 {
+                debug!("paged {pages_fetched} older-history file(s) for {ticker}");
+            }
 
             Ok(json!({
                 "company": company_name,
@@ -567,7 +633,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                     .map(|row| {
                         let row = row.as_array().unwrap();
                         json!({
-                            "cik": row.get(0).cloned().unwrap_or(Value::Null),
+                            "cik": row.first().cloned().unwrap_or(Value::Null),
                             "name": row.get(1).cloned().unwrap_or(Value::Null),
                             "ticker": row.get(2).cloned().unwrap_or(Value::Null),
                             "exchange": row.get(3).cloned().unwrap_or(Value::Null),
@@ -755,14 +821,29 @@ async fn dispatch(state: &Arc<RwLock<State>>, req: Request) -> Option<Response> 
     }
 
     let resp = match req.method.as_str() {
-        "initialize" => Response::ok(
-            id,
-            json!({
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "capabilities": { "tools": {} },
-                "serverInfo": { "name": "sec-mcp", "version": SERVER_VERSION }
-            }),
-        ),
+        "initialize" => {
+            // Echo the client's requested protocol version when we support it;
+            // otherwise fall back to our latest and let the client decide.
+            let requested = req
+                .params
+                .as_ref()
+                .and_then(|p| p["protocolVersion"].as_str());
+            let negotiated = match requested {
+                Some(v) if SUPPORTED_PROTOCOL_VERSIONS.contains(&v) => v,
+                _ => MCP_PROTOCOL_VERSION,
+            };
+            if let Some(v) = requested {
+                debug!("client requested protocol {v}, negotiated {negotiated}");
+            }
+            Response::ok(
+                id,
+                json!({
+                    "protocolVersion": negotiated,
+                    "capabilities": { "tools": {} },
+                    "serverInfo": { "name": "sec-mcp", "version": SERVER_VERSION }
+                }),
+            )
+        }
 
         "tools/list" => {
             let configured = state.read().await.is_configured();
