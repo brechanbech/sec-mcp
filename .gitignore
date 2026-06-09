@@ -1,4 +1,5 @@
 /target
+/sec-mcp-*-apple-darwin
 .cargo/credentials.toml
 Cargo.lock
 .claude/
