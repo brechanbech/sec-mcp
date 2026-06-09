@@ -171,6 +171,11 @@ impl EdgarClient {
     }
 
     async fn company_concept(&self, cik: &str, taxonomy: &str, concept: &str) -> Result<Value> {
+        // `taxonomy` and `concept` are caller-supplied (ultimately model-
+        // controlled), so percent-encode them before they enter the path.
+        // `cik` is a resolved 10-digit number and needs no encoding.
+        let taxonomy = urlencoding::encode(taxonomy);
+        let concept = urlencoding::encode(concept);
         let url = format!(
             "https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/{taxonomy}/{concept}.json"
         );
@@ -198,6 +203,13 @@ impl EdgarClient {
         unit: &str,
         period_code: &str,
     ) -> Result<Value> {
+        // All four segments are caller-supplied; percent-encode each so a
+        // crafted value can't inject path separators or other URL syntax. The
+        // literal `CY` prefix stays outside the encoded segment.
+        let taxonomy = urlencoding::encode(taxonomy);
+        let concept = urlencoding::encode(concept);
+        let unit = urlencoding::encode(unit);
+        let period_code = urlencoding::encode(period_code);
         let url = format!(
             "https://data.sec.gov/api/xbrl/frames/{taxonomy}/{concept}/{unit}/CY{period_code}.json"
         );
