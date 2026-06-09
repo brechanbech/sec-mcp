@@ -34,10 +34,16 @@ sudo mv sec-mcp-<arch>-apple-darwin /usr/local/bin/sec-mcp
 
 ### Option 2: Install with Cargo
 
-If you have [Rust](https://rustup.rs) installed:
+If you have [Rust](https://rustup.rs) installed (1.85 or newer):
 ```zsh
 cargo install sec-mcp
 ```
+
+Building from source compiles the rustls crypto backend (`aws-lc-sys`) from
+C, so you need a **C compiler and `cmake`** on the build host. macOS (Xcode
+Command Line Tools) and most desktop Linux distros already have these; a
+minimal Linux image may not — install them first, e.g.
+`apt install build-essential cmake` on Debian/Ubuntu.
 
 ## Configure Claude Desktop
 
