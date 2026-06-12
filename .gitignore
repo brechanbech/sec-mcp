@@ -1,6 +1,5 @@
 /target
 /sec-mcp-*-apple-darwin
 .cargo/credentials.toml
-Cargo.lock
 .claude/
 .DS_Store
