@@ -106,4 +106,11 @@ On your first SEC-related request Claude will explain that a contact email is re
 
 ## License
 
-MIT OR Apache-2.0
+MIT — see [LICENSE.md](LICENSE.md) for details.
+
+## MCP registry
+
+Ownership-verification token for the [MCP registry](https://registry.modelcontextprotocol.io)
+(read from this crate's rendered README on crates.io):
+
+> Registry ownership token: `mcp-name: io.github.brechanbech/sec-mcp`
