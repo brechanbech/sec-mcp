@@ -39,11 +39,11 @@ If you have [Rust](https://rustup.rs) installed (1.85 or newer):
 cargo install sec-mcp
 ```
 
-Building from source compiles the rustls crypto backend (`aws-lc-sys`) from
-C, so you need a **C compiler and `cmake`** on the build host. macOS (Xcode
-Command Line Tools) and most desktop Linux distros already have these; a
-minimal Linux image may not — install them first, e.g.
-`apt install build-essential cmake` on Debian/Ubuntu.
+Building from source compiles the rustls crypto backend (`ring`), which has a
+small amount of C, so you need a **C compiler** on the build host — but no
+`cmake` or assembler. macOS (Xcode Command Line Tools) and most desktop Linux
+distros already have one; a minimal Linux image may not — install it first,
+e.g. `apt install build-essential` on Debian/Ubuntu.
 
 ## Configure Claude Desktop
 

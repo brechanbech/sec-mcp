@@ -905,6 +905,13 @@ async fn dispatch(state: &Arc<RwLock<State>>, req: Request) -> Option<Response> 
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // reqwest is built with `rustls-no-provider`, so we must install a process
+    // default crypto provider before any Client is constructed. We use ring
+    // (pure-Rust-friendly, no CMake/NASM build deps) rather than aws-lc-rs.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("failed to install rustls ring crypto provider"))?;
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(
