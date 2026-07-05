@@ -8,6 +8,13 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- Opt-in live smoke tests (`tests/live_smoke.rs`) that drive the built binary
+  over stdio against the real EDGAR APIs, gated on `SEC_MCP_LIVE_EMAIL` and
+  skipped by default. Covers `sec_lookup_cik`, `sec_company_facts`,
+  `sec_recent_filings`, and both simple- and compound-unit `sec_xbrl_frames` —
+  the last a regression guard for the 0.4.2 per-share (`USD/shares`) fix.
+
 ## [0.4.2] - 2026-07-05
 
 ### Fixed
