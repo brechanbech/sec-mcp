@@ -104,6 +104,26 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `CashAndCashEquivalentsAtCarryingValue` | Cash and equivalents |
 | `CommonStockSharesOutstanding` | Shares outstanding |
 
+## Development
+
+```zsh
+cargo test          # offline; hits no network
+```
+
+There is also an opt-in live suite that drives the built server over stdio
+against the **real** SEC EDGAR APIs — the thing offline tests can't see, like
+EDGAR changing a response shape or a URL-construction quirk slipping through. It
+is skipped unless `SEC_MCP_LIVE_EMAIL` is set, which both opts in and supplies
+the contact email the [fair-access policy](https://www.sec.gov/os/accessing-edgar-data)
+requires (the address is read from the environment, never committed):
+
+```zsh
+SEC_MCP_LIVE_EMAIL="you@example.com" cargo test --test live_smoke -- --nocapture
+```
+
+The suite runs sequentially through one server process, so it stays well within
+EDGAR's rate limit.
+
 ## License
 
 MIT — see [LICENSE.md](LICENSE.md) for details.
