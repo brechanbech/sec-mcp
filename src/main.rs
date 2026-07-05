@@ -206,9 +206,14 @@ impl EdgarClient {
         // All four segments are caller-supplied; percent-encode each so a
         // crafted value can't inject path separators or other URL syntax. The
         // literal `CY` prefix stays outside the encoded segment.
+        //
+        // Compound units use the SEC's `-per-` convention in the path, not a
+        // slash: `USD/shares` (e.g. EarningsPerShareBasic) is `USD-per-shares`.
+        // Map that before encoding — a percent-encoded slash (`%2F`) 404s.
         let taxonomy = urlencoding::encode(taxonomy);
         let concept = urlencoding::encode(concept);
-        let unit = urlencoding::encode(unit);
+        let unit_per = unit.replace('/', "-per-");
+        let unit = urlencoding::encode(&unit_per);
         let period_code = urlencoding::encode(period_code);
         let url = format!(
             "https://data.sec.gov/api/xbrl/frames/{taxonomy}/{concept}/{unit}/CY{period_code}.json"
@@ -364,7 +369,7 @@ fn tool_list(configured: bool) -> Value {
                         "period": { "type": "string", "description": "Period: year like '2024' (annual, duration concepts only), or quarter like '2024Q1'" },
                         "instant": { "type": "boolean", "description": "Set true for instant/balance-sheet concepts measured at a point in time (must be combined with a quarterly period). Default false.", "default": false },
                         "taxonomy": { "type": "string", "description": "Taxonomy: 'us-gaap' (default) or 'ifrs-full'", "default": "us-gaap" },
-                        "unit": { "type": "string", "description": "Unit: 'USD' (default), 'pure', 'shares', etc.", "default": "USD" },
+                        "unit": { "type": "string", "description": "Unit: 'USD' (default), 'pure', 'shares', or a compound unit like 'USD/shares' for per-share concepts (e.g. EarningsPerShareBasic).", "default": "USD" },
                         "limit": { "type": "integer", "description": "Number of top entries to return (default 20)", "default": 20 }
                     },
                     "required": ["concept", "period"]
