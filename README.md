@@ -20,30 +20,16 @@ If you only pull one or two filings a year, you don't need this — just give Cl
 
 ## Install
 
-### Option 1: Download a prebuilt binary (no Rust required)
-
-1. Download the latest binary for your Mac from the [Releases](https://codeberg.org/brechanbech/sec-mcp/releases) page:
-   - `sec-mcp-aarch64-apple-darwin` — Apple Silicon (M1/M2/M3/M4)
-   - `sec-mcp-x86_64-apple-darwin` — Intel
-
-2. Make it executable and move it into your PATH. Replace `<arch>` with either `aarch64` or `x86_64` to match the binary you downloaded:
-```zsh
-chmod +x sec-mcp-<arch>-apple-darwin
-sudo mv sec-mcp-<arch>-apple-darwin /usr/local/bin/sec-mcp
-```
-
-### Option 2: Install with Cargo
-
-If you have [Rust](https://rustup.rs) installed (1.85 or newer):
+Install with [Cargo](https://rustup.rs) (Rust 1.85 or newer):
 ```zsh
 cargo install sec-mcp
 ```
 
-Building from source compiles the rustls crypto backend (`ring`), which has a
-small amount of C, so you need a **C compiler** on the build host — but no
-`cmake` or assembler. macOS (Xcode Command Line Tools) and most desktop Linux
-distros already have one; a minimal Linux image may not — install it first,
-e.g. `apt install build-essential` on Debian/Ubuntu.
+This compiles the rustls crypto backend (`ring`), which has a small amount of C,
+so you need a **C compiler** on the build host — but no `cmake` or assembler.
+macOS (Xcode Command Line Tools) and most desktop Linux distros already have one;
+a minimal Linux image may not — install it first, e.g. `apt install build-essential`
+on Debian/Ubuntu.
 
 ## Configure Claude Desktop
 
