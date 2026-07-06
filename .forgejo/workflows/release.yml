@@ -1,0 +1,57 @@
+name: release
+
+# Builds a static, fully self-contained Linux binary on every `v*` tag and
+# attaches it to the corresponding Forgejo/Codeberg release. The binary is
+# linked against musl, so it runs on any Linux — including minimal images that
+# lack a C compiler or a matching glibc. (The C compiler that `ring` needs is a
+# build-time-only concern here; end users just download and run.)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  linux-musl:
+    # Codeberg's shared runners are labelled by size (tiny/small/medium, each
+    # with a `-lazy` variant). `medium` is the largest, which suits a release
+    # compile; the non-lazy variant pulls a fresh image, preferable for a job
+    # that only runs on tags. Change this label when you move to self-hosted.
+    runs-on: codeberg-medium
+    container:
+      image: rust:1.85-bookworm       # non-slim image ships gcc, so `ring` builds
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install musl toolchain
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends musl-tools
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Build (static, x86_64 musl)
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/x86_64-unknown-linux-musl/release/sec-mcp dist/sec-mcp
+          cd dist
+          tar -czf "sec-mcp-${GITHUB_REF_NAME}-x86_64-unknown-linux-musl.tar.gz" sec-mcp
+          rm sec-mcp
+          sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Publish to release
+        # Pin to a commit SHA once you've vetted a release — a moving `@v2` tag
+        # is a supply-chain surface.
+        uses: https://code.forgejo.org/actions/forgejo-release@v2
+        with:
+          direction: upload
+          release-dir: dist
+          tag: ${{ github.ref_name }}
+          # Forgejo injects this automatic per-run token — no PAT/secret needed.
+          # If the publish step 403s, swap in a `write:repository` PAT stored as
+          # a secret: token: ${{ secrets.FORGEJO_TOKEN }}
+          token: ${{ github.token }}
