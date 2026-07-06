@@ -13,11 +13,11 @@ on:
 
 jobs:
   linux-musl:
-    # Codeberg's shared runners are labelled by size (tiny/small/medium, each
-    # with a `-lazy` variant). `medium` is the largest, which suits a release
-    # compile; the non-lazy variant pulls a fresh image, preferable for a job
-    # that only runs on tags. Change this label when you move to self-hosted.
-    runs-on: codeberg-medium
+    # Codeberg's shared runners are labelled by size (tiny/small/medium). On the
+    # shared pool it's the `-lazy` variants that actually get scheduled — the
+    # plain labels sit waiting for a runner that never claims them. `medium` is
+    # the largest, which suits a release compile. Change this when self-hosted.
+    runs-on: codeberg-medium-lazy
     container:
       image: rust:1.85-bookworm       # non-slim image ships gcc, so `ring` builds
 
