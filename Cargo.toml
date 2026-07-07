@@ -2,7 +2,7 @@
 name = "sec-mcp"
 version = "0.4.2"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.86"
 authors = ["Stefan Ractliffe"]
 description = "MCP server for SEC EDGAR data — company filings, financial concepts, and company info via Claude Desktop"
 license = "MIT"

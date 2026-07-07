@@ -20,7 +20,7 @@ If you only pull one or two filings a year, you don't need this — just give Cl
 
 ## Install
 
-Install with [Cargo](https://rustup.rs) (Rust 1.85 or newer):
+Install with [Cargo](https://rustup.rs) (Rust 1.86 or newer):
 ```zsh
 cargo install sec-mcp
 ```

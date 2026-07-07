@@ -22,6 +22,16 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   `sec_recent_filings`, and both simple- and compound-unit `sec_xbrl_frames` —
   the last a regression guard for the 0.4.2 per-share (`USD/shares`) fix.
 
+### Changed
+- Minimum supported Rust version is now **1.86** (was 1.85). Transitive
+  dependencies (`icu_*`, `idna_adapter`) in the pinned lockfile require rustc
+  1.86, so a `--locked` build on 1.85 no longer compiles.
+
+### Security
+- Bumped `anyhow` to 1.0.103, clearing RUSTSEC-2026-0190 (an unsoundness in
+  `Error::downcast_mut`, not exercised by this crate). Dependency advisories are
+  now checked in CI via `cargo-deny` on every push, pull request, and weekly.
+
 ## [0.4.2] - 2026-07-05
 
 ### Fixed
