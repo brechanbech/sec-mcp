@@ -50,8 +50,15 @@ jobs:
           "$HOME/.cargo/bin/rustup" target add \
             x86_64-unknown-linux-musl x86_64-pc-windows-msvc
 
-      - name: Install cargo-xwin
-        run: cargo install cargo-xwin --locked
+      - name: Install cargo-xwin (prebuilt)
+        run: |
+          # Fetch a prebuilt cargo-xwin rather than compiling it — the from-source
+          # build (150+ crates) overwhelmed the shared runner and the job was
+          # killed mid-compile. cargo-binstall is itself a pinned prebuilt binary.
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz \
+            | tar -xz -C "$HOME/.cargo/bin"
+          cargo binstall --no-confirm cargo-xwin@0.23.0
 
       - name: Build Linux (static, x86_64 musl)
         run: cargo build --release --locked --target x86_64-unknown-linux-musl
