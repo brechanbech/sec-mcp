@@ -8,6 +8,8 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-07
+
 ### Removed
 - The prebuilt-binary install option (README "Option 1"). Install is now
   `cargo install sec-mcp` from crates.io only. An unsigned/un-notarised binary
@@ -16,6 +18,11 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   the download channel added maintenance without serving a real gap.
 
 ### Added
+- Prebuilt **Linux** binary channel: every release now carries a static
+  `x86_64-unknown-linux-musl` build plus a `SHA256SUMS`, produced by CI — no C
+  compiler, no Rust toolchain, and no particular glibc, so it's a real
+  no-dependencies install on any Linux. Other platforms remain `cargo install`
+  (see Removed for the retired unsigned-macOS download).
 - Opt-in live smoke tests (`tests/live_smoke.rs`) that drive the built binary
   over stdio against the real EDGAR APIs, gated on `SEC_MCP_LIVE_EMAIL` and
   skipped by default. Covers `sec_lookup_cik`, `sec_company_facts`,

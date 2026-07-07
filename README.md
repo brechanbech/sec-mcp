@@ -20,6 +20,24 @@ If you only pull one or two filings a year, you don't need this — just give Cl
 
 ## Install
 
+### Linux — prebuilt binary (no toolchain, no C compiler)
+
+Every release attaches a static `x86_64-unknown-linux-musl` build that runs on
+any Linux with no Rust toolchain, no C compiler, and no particular glibc. Grab
+the latest from the [releases page](https://codeberg.org/brechanbech/sec-mcp/releases),
+verify it against the published `SHA256SUMS`, and put it on your PATH (replace
+`VERSION`, e.g. `v0.4.3`):
+
+```sh
+curl -LO https://codeberg.org/brechanbech/sec-mcp/releases/download/VERSION/sec-mcp-VERSION-x86_64-unknown-linux-musl.tar.gz
+curl -LO https://codeberg.org/brechanbech/sec-mcp/releases/download/VERSION/SHA256SUMS
+sha256sum -c SHA256SUMS
+tar xzf sec-mcp-VERSION-x86_64-unknown-linux-musl.tar.gz
+install -m 755 sec-mcp ~/.local/bin/
+```
+
+### All platforms — `cargo install`
+
 Install with [Cargo](https://rustup.rs) (Rust 1.86 or newer):
 ```zsh
 cargo install sec-mcp
@@ -28,8 +46,8 @@ cargo install sec-mcp
 This compiles the rustls crypto backend (`ring`), which has a small amount of C,
 so you need a **C compiler** on the build host — but no `cmake` or assembler.
 macOS (Xcode Command Line Tools) and most desktop Linux distros already have one;
-a minimal Linux image may not — install it first, e.g. `apt install build-essential`
-on Debian/Ubuntu.
+a minimal Linux image may not — install it first (or just use the prebuilt Linux
+binary above), e.g. `apt install build-essential` on Debian/Ubuntu.
 
 ## Configure Claude Desktop
 
