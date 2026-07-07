@@ -13,11 +13,12 @@ on:
 
 jobs:
   linux-musl:
-    # Codeberg's shared runners are labelled by size (tiny/small/medium). On the
-    # shared pool it's the `-lazy` variants that actually get scheduled — the
-    # plain labels sit waiting for a runner that never claims them. `medium` is
-    # the largest, which suits a release compile. Change this when self-hosted.
-    runs-on: codeberg-medium-lazy
+    # Codeberg's shared runners are labelled by size (tiny/small/medium), and
+    # only the `-lazy` variants get scheduled. `medium-lazy` proved so
+    # oversubscribed that a release job sat queued for hours, so we use
+    # `small-lazy` — it turns jobs around promptly and handles this compile
+    # fine. Change this when self-hosted.
+    runs-on: codeberg-small-lazy
     container:
       # The JS actions below (checkout, forgejo-release) are executed with the
       # container's own `node` — a bare `rust` image has none and fails at exit
