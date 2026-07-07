@@ -1,0 +1,48 @@
+name: audit
+
+# Checks the dependency tree against the RUSTSEC advisory database on every push
+# to main, every pull request, and weekly on a schedule — so a newly-disclosed
+# advisory (like the anyhow unsoundness that prompted this) surfaces without
+# anyone remembering to run `cargo deny` by hand. This compiles nothing; it only
+# resolves the graph from Cargo.lock and checks it, so it's cheap.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  advisories:
+    # A light job — the smallest shared runner is plenty since nothing compiles.
+    runs-on: codeberg-small-lazy
+    container:
+      # Node for the checkout JS action (see the release workflow for why). Rust
+      # is installed below because `cargo-deny` shells out to `cargo metadata`,
+      # and Debian's packaged cargo is too old to parse a v4 Cargo.lock.
+      image: node:20-bookworm
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install Rust (for `cargo metadata`)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain 1.86.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install cargo-deny (pinned prebuilt binary)
+        env:
+          DENY_VERSION: '0.19.8'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSfL \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_VERSION}/cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin \
+              "cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl/cargo-deny"
+          cargo-deny --version
+
+      - name: Check advisories
+        run: cargo-deny check advisories
