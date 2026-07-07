@@ -28,6 +28,10 @@ jobs:
       # cargo-xwin fetches the Microsoft CRT to link the windows-msvc target;
       # accept its licence non-interactively.
       XWIN_ACCEPT_LICENSE: '1'
+      # Only fetch the x86_64 CRT (xwin pulls x86/x86_64/aarch/aarch64 by
+      # default). A quarter of the download-and-splat I/O, which was tipping the
+      # shared runner's podman control plane into a `context deadline exceeded`.
+      XWIN_ARCH: x86_64
 
     steps:
       - name: Check out
