@@ -1,10 +1,16 @@
 name: release
 
-# Builds self-contained release binaries on every `v*` tag and attaches them to
-# the Forgejo/Codeberg release:
-#   - Linux:   x86_64-unknown-linux-musl (static — no C compiler or glibc needed)
-#   - Windows: x86_64-pc-windows-msvc    (cross-compiled from Linux via cargo-xwin)
-# End users just download and run; every build-time toolchain stays in CI.
+# Builds a static, fully self-contained Linux binary on every `v*` tag and
+# attaches it to the corresponding Forgejo/Codeberg release. The binary is
+# linked against musl, so it runs on any Linux — including minimal images that
+# lack a C compiler or a matching glibc. (The C compiler that `ring` needs is a
+# build-time-only concern here; end users just download and run.)
+#
+# A Windows cross-build (x86_64-pc-windows-msvc via cargo-xwin) was attempted
+# but Codeberg's shared `small-lazy` runner can't sustain it: the podman control
+# plane times out ("context deadline exceeded") under the xwin CRT unpack and
+# the compile. Revisit on a self-hosted runner with real resources — the CI
+# system (Forgejo Actions vs Woodpecker) is not the blocker, the machine is.
 
 on:
   push:
@@ -12,74 +18,45 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  linux-musl:
     # Codeberg's shared runners are labelled by size (tiny/small/medium), and
     # only the `-lazy` variants get scheduled. `medium-lazy` proved so
     # oversubscribed that a release job sat queued for hours, so we use
-    # `small-lazy` — it turns jobs around promptly. Change this when self-hosted.
+    # `small-lazy` — it turns jobs around promptly and handles this compile
+    # fine. Change this when self-hosted.
     runs-on: codeberg-small-lazy
     container:
       # The JS actions below (checkout, forgejo-release) are executed with the
       # container's own `node` — a bare `rust` image has none and fails at exit
       # 127. The full node:*-bookworm image is buildpack-deps-based, so it also
-      # ships gcc and curl. Rust and the cross toolchains are installed below.
+      # ships gcc (needed to compile `ring`) and curl. Rust is installed via
+      # rustup below rather than baked into the image.
       image: node:20-bookworm
-    env:
-      # cargo-xwin fetches the Microsoft CRT to link the windows-msvc target;
-      # accept its licence non-interactively.
-      XWIN_ACCEPT_LICENSE: '1'
-      # Only fetch the x86_64 CRT (xwin pulls x86/x86_64/aarch/aarch64 by
-      # default). A quarter of the download-and-splat I/O, which was tipping the
-      # shared runner's podman control plane into a `context deadline exceeded`.
-      XWIN_ARCH: x86_64
 
     steps:
       - name: Check out
         uses: actions/checkout@v4
 
-      - name: Install toolchains
+      - name: Install Rust + musl toolchain
         run: |
           apt-get update
-          # musl-tools: static Linux build. clang/lld: the MSVC-style compiler
-          # and linker cargo-xwin drives. nasm: ring's Windows asm is NASM-format.
-          # zip: Windows artifact packaging.
-          apt-get install -y --no-install-recommends \
-            musl-tools clang lld llvm nasm zip
-          # `stable` (not the 1.86 MSRV floor) so `cargo install cargo-xwin` —
-          # which may want a newer rustc than 1.86 — always compiles; a release
-          # build has no reason to pin to the minimum.
+          apt-get install -y --no-install-recommends musl-tools
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain stable
+            | sh -s -- -y --profile minimal --default-toolchain 1.86.0
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          "$HOME/.cargo/bin/rustup" target add \
-            x86_64-unknown-linux-musl x86_64-pc-windows-msvc
+          "$HOME/.cargo/bin/rustup" target add x86_64-unknown-linux-musl
 
-      - name: Install cargo-xwin (prebuilt)
-        run: |
-          # Fetch a prebuilt cargo-xwin rather than compiling it — the from-source
-          # build (150+ crates) overwhelmed the shared runner and the job was
-          # killed mid-compile. cargo-binstall is itself a pinned prebuilt binary.
-          curl -L --proto '=https' --tlsv1.2 -sSf \
-            https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz \
-            | tar -xz -C "$HOME/.cargo/bin"
-          cargo binstall --no-confirm cargo-xwin@0.23.0
-
-      - name: Build Linux (static, x86_64 musl)
+      - name: Build (static, x86_64 musl)
         run: cargo build --release --locked --target x86_64-unknown-linux-musl
-
-      - name: Build Windows (x86_64-pc-windows-msvc)
-        run: cargo xwin build --release --locked --target x86_64-pc-windows-msvc
 
       - name: Package
         run: |
           mkdir -p dist
-          cp target/x86_64-unknown-linux-musl/release/sec-mcp  dist/sec-mcp
-          cp target/x86_64-pc-windows-msvc/release/sec-mcp.exe dist/sec-mcp.exe
+          cp target/x86_64-unknown-linux-musl/release/sec-mcp dist/sec-mcp
           cd dist
           tar -czf "sec-mcp-${GITHUB_REF_NAME}-x86_64-unknown-linux-musl.tar.gz" sec-mcp
-          zip -q   "sec-mcp-${GITHUB_REF_NAME}-x86_64-pc-windows-msvc.zip"       sec-mcp.exe
-          rm sec-mcp sec-mcp.exe
-          sha256sum sec-mcp-*.tar.gz sec-mcp-*.zip > SHA256SUMS
+          rm sec-mcp
+          sha256sum *.tar.gz > SHA256SUMS
 
       - name: Publish to release
         # Pin to a commit SHA once you've vetted a release — a moving `@v2` tag
@@ -90,4 +67,6 @@ jobs:
           release-dir: dist
           tag: ${{ github.ref_name }}
           # Forgejo injects this automatic per-run token — no PAT/secret needed.
+          # If the publish step 403s, swap in a `write:repository` PAT stored as
+          # a secret: token: ${{ secrets.FORGEJO_TOKEN }}
           token: ${{ github.token }}
