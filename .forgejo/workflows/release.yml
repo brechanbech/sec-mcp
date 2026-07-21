@@ -16,6 +16,16 @@ on:
   push:
     tags:
       - 'v*'
+  # Lets a cancelled or failed tag run be re-run without deleting and
+  # re-pushing the tag — the 0.4.4 run was killed mid-build by a Codeberg
+  # outage, and tag surgery was the only way back. The tag must be passed
+  # explicitly: a dispatch run's `ref_name` is the branch it was started
+  # from, not the tag whose assets we're building.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach assets to, e.g. v0.4.4'
+        required: true
 
 jobs:
   linux-musl:
@@ -34,8 +44,19 @@ jobs:
       image: node:20-bookworm
 
     steps:
+      # On a tag push this is just `ref_name`; on a manual dispatch it's the
+      # tag the operator named. Everything downstream uses this, never
+      # `ref_name` directly, so both paths produce identical artefacts.
+      - name: Resolve release tag
+        id: rel
+        run: |
+          echo "tag=${{ github.event.inputs.tag || github.ref_name }}" \
+            >> "$GITHUB_OUTPUT"
+
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.rel.outputs.tag }}
 
       - name: Install Rust + musl toolchain
         run: |
@@ -50,11 +71,13 @@ jobs:
         run: cargo build --release --locked --target x86_64-unknown-linux-musl
 
       - name: Package
+        env:
+          REL_TAG: ${{ steps.rel.outputs.tag }}
         run: |
           mkdir -p dist
           cp target/x86_64-unknown-linux-musl/release/sec-mcp dist/sec-mcp
           cd dist
-          tar -czf "sec-mcp-${GITHUB_REF_NAME}-x86_64-unknown-linux-musl.tar.gz" sec-mcp
+          tar -czf "sec-mcp-${REL_TAG}-x86_64-unknown-linux-musl.tar.gz" sec-mcp
           rm sec-mcp
           sha256sum *.tar.gz > SHA256SUMS
 
@@ -65,7 +88,7 @@ jobs:
         with:
           direction: upload
           release-dir: dist
-          tag: ${{ github.ref_name }}
+          tag: ${{ steps.rel.outputs.tag }}
           # Forgejo injects this automatic per-run token — no PAT/secret needed.
           # If the publish step 403s, swap in a `write:repository` PAT stored as
           # a secret: token: ${{ secrets.FORGEJO_TOKEN }}
