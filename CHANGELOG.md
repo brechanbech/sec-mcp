@@ -8,7 +8,19 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
-## [0.4.3] - 2026-07-07
+## [0.4.4] - 2026-07-21
+
+### Changed
+- Requests now declare `Accept-Encoding: gzip` (reqwest's `gzip` feature), which
+  SEC's fair-access guidance asks callers to do and which the server had not
+  been doing. Measured on `companyfacts` for CIK 0000320193: 3,748,682 bytes
+  uncompressed vs 268,153 gzipped — a 14× reduction on the largest response the
+  server fetches. Decoding is transparent, so no response handling changed.
+- The convenience `edgar_url`/`edgar_page` links returned by `sec_lookup_cik`
+  and `sec_company_info` now point at `sec.gov/edgar/browse/?CIK=`, the modern
+  EDGAR company page. The previous `cgi-bin/browse-edgar?action=getcompany`
+  form still works but 301-redirects there; nothing fetched these links, so
+  this only saves the user a hop.
 
 ### Removed
 - The prebuilt-binary install option (README "Option 1"). Install is now

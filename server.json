@@ -3,7 +3,7 @@
   "name": "io.github.brechanbech/sec-mcp",
   "title": "SEC EDGAR",
   "description": "MCP server for SEC EDGAR data — company filings, financial concepts, and company info",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "websiteUrl": "https://codeberg.org/brechanbech/sec-mcp",
   "repository": {
     "url": "https://github.com/brechanbech/sec-mcp",
@@ -13,7 +13,7 @@
     {
       "registryType": "cargo",
       "identifier": "sec-mcp",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "transport": {
         "type": "stdio"
       }

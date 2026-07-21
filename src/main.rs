@@ -83,6 +83,10 @@ impl EdgarClient {
         let user_agent = format!("sec-mcp/{SERVER_VERSION} (contact: {contact_email})");
         let http = reqwest::Client::builder()
             .user_agent(user_agent)
+            // SEC's fair-access guidance asks callers to declare `Accept-Encoding:
+            // gzip`. It matters here: `companyfacts` for a large filer is ~3.7 MB
+            // uncompressed and ~270 KB gzipped. reqwest decodes transparently.
+            .gzip(true)
             .timeout(HTTP_TIMEOUT)
             .build()
             .context("failed to build HTTP client")?;
@@ -475,7 +479,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 "ticker": ticker.to_uppercase(),
                 "cik": cik,
                 "edgar_url": format!(
-                    "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}"
+                    "https://www.sec.gov/edgar/browse/?CIK={cik}"
                 )
             }))
         }
@@ -617,7 +621,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 "exchanges": data["exchanges"],
                 "tickers": data["tickers"],
                 "edgar_page": format!(
-                    "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={cik}"
+                    "https://www.sec.gov/edgar/browse/?CIK={cik}"
                 )
             }))
         }
