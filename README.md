@@ -1,5 +1,7 @@
 # sec-mcp
 
+[![audit](https://codeberg.org/brechanbech/sec-mcp/actions/workflows/audit.yml/badge.svg)](https://codeberg.org/brechanbech/sec-mcp/actions)
+
 A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude Desktop access to SEC EDGAR data — company filings, financial statements, and company info. No API key needed.
 
 ## Why an MCP for this?
