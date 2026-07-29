@@ -39,6 +39,14 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   2026-07-28 revision recommends so clients can cache the listing.
 - **MSRV is now 1.88** (from 1.86), matching `rmcp` 3's own requirement.
 
+### Removed
+- **The prebuilt Linux binary channel, and with it the `release` workflow.**
+  Releases no longer attach an `x86_64-unknown-linux-musl` tarball or
+  `SHA256SUMS`; `cargo install sec-mcp` is the only install path, and the README
+  section documenting the download is gone. The workflow existed solely to build
+  and attach that artefact, so nothing remained once it went — and its pinned
+  1.86.0 toolchain could not have built this release in any case.
+
 ### Fixed
 - The server identified itself as `rmcp`/its SDK version rather than `sec-mcp`
   in the handshake — latent before, and newly visible through `server/discover`.
