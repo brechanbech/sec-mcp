@@ -40,7 +40,7 @@ install -m 755 sec-mcp ~/.local/bin/
 
 ### All platforms — `cargo install`
 
-Install with [Cargo](https://rustup.rs) (Rust 1.86 or newer):
+Install with [Cargo](https://rustup.rs) (Rust 1.88 or newer):
 ```zsh
 cargo install sec-mcp
 ```

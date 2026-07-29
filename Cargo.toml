@@ -1,8 +1,9 @@
 [package]
 name = "sec-mcp"
-version = "0.4.4"
+version = "0.5.0"
 edition = "2021"
-rust-version = "1.86"
+# 1.88: rmcp 3 declares this as its own MSRV.
+rust-version = "1.88"
 authors = ["Stefan Ractliffe"]
 description = "MCP server for SEC EDGAR data — company filings, financial concepts, and company info via Claude Desktop"
 license = "MIT"
@@ -17,6 +18,12 @@ name = "sec-mcp"
 path = "src/main.rs"
 
 [dependencies]
+# --- MCP ---
+# The protocol layer (framing, negotiation, server/discover, resultType) is the
+# SDK's; this crate supplies only the tool set. Previously hand-rolled.
+rmcp = { version = "3", features = ["server", "macros", "transport-io"] }
+schemars = "1"
+
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

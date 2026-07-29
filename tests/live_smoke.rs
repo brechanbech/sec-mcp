@@ -1,10 +1,16 @@
-//! Opt-in live smoke tests.
+//! Protocol and opt-in live smoke tests.
 //!
-//! These drive the built `sec-mcp` binary over stdio (JSON-RPC, exactly as an
-//! MCP client would) against the **real** SEC EDGAR APIs. They are **skipped by
-//! default** — `cargo test` stays offline — and run only when
-//! `SEC_MCP_LIVE_EMAIL` is set, which both opts in and supplies the contact
-//! email EDGAR's fair-access policy requires:
+//! Both drive the built `sec-mcp` binary over stdio (JSON-RPC, exactly as an MCP
+//! client would), so they exercise the real `rmcp` protocol layer rather than
+//! calling into the crate.
+//!
+//! [`protocol_surface`] runs **always** and touches no network: it covers the
+//! MCP `2026-07-28` surface — `server/discover`, version negotiation, the
+//! `tools/list` cache hints, and the stateless (handshake-free) request path.
+//!
+//! [`live_smoke`] hits the **real** SEC EDGAR APIs and is **skipped by
+//! default** — it runs only when `SEC_MCP_LIVE_EMAIL` is set, which both opts in
+//! and supplies the contact email EDGAR's fair-access policy requires:
 //!
 //! ```sh
 //! SEC_MCP_LIVE_EMAIL="you@example.com" cargo test --test live_smoke -- --nocapture
@@ -22,8 +28,35 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::{json, Value};
+
+/// Distinguishes concurrent [`Server`] sandboxes. Tests share one process, so
+/// the pid alone is not unique enough once there is more than one test.
+static SANDBOX_SEQ: AtomicU32 = AtomicU32::new(0);
+
+/// The `initialize` params every MCP revision requires. `capabilities` and
+/// `clientInfo` are mandatory alongside `protocolVersion`; omitting them leaves
+/// the handshake incomplete and the server will not serve.
+fn init_params(protocol_version: &str) -> Value {
+    json!({
+        "protocolVersion": protocol_version,
+        "capabilities": {},
+        "clientInfo": { "name": "sec-mcp-tests", "version": "0" }
+    })
+}
+
+/// The self-describing `_meta` a `2026-07-28` client puts on every request when
+/// it skips the handshake. `protocolVersion` and `clientCapabilities` are both
+/// required; a request missing either is rejected with `-32602`.
+fn meta_block() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { "name": "sec-mcp-tests", "version": "0" }
+    })
+}
 
 /// The opt-in switch and contact email, read once. Absence skips the suite.
 fn live_email() -> Option<String> {
@@ -48,8 +81,9 @@ struct Server {
 
 impl Server {
     fn start() -> Self {
+        let seq = SANDBOX_SEQ.fetch_add(1, Ordering::Relaxed);
         let sandbox =
-            std::env::temp_dir().join(format!("sec-mcp-live-{}", std::process::id()));
+            std::env::temp_dir().join(format!("sec-mcp-live-{}-{seq}", std::process::id()));
         std::fs::create_dir_all(&sandbox).expect("create sandbox config dir");
 
         let mut child = Command::new(env!("CARGO_BIN_EXE_sec-mcp"))
@@ -63,7 +97,13 @@ impl Server {
 
         let stdin = child.stdin.take().expect("child stdin");
         let stdout = BufReader::new(child.stdout.take().expect("child stdout"));
-        Server { child, stdin, stdout, sandbox, next_id: 1 }
+        Server {
+            child,
+            stdin,
+            stdout,
+            sandbox,
+            next_id: 1,
+        }
     }
 
     /// Send one request and return the response whose `id` matches.
@@ -78,11 +118,34 @@ impl Server {
             let mut line = String::new();
             let n = self.stdout.read_line(&mut line).expect("read response");
             assert!(n > 0, "server closed stdout before answering id {id}");
-            let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
             if v.get("id").and_then(Value::as_i64) == Some(id) {
                 return v;
             }
         }
+    }
+
+    /// Send a notification (no `id`, so no response is expected).
+    fn notify(&mut self, method: &str) {
+        let req = json!({ "jsonrpc": "2.0", "method": method });
+        writeln!(self.stdin, "{req}").expect("write notification");
+        self.stdin.flush().expect("flush notification");
+    }
+
+    /// Complete the MCP handshake and return the negotiated protocol version.
+    fn handshake(&mut self, protocol_version: &str) -> String {
+        let init = self.request("initialize", init_params(protocol_version));
+        assert_eq!(
+            init["result"]["serverInfo"]["name"], "sec-mcp",
+            "init: {init}"
+        );
+        self.notify("notifications/initialized");
+        init["result"]["protocolVersion"]
+            .as_str()
+            .unwrap_or_else(|| panic!("init: no negotiated protocolVersion in {init}"))
+            .to_string()
     }
 
     /// Call a tool and return its result payload (the tool's JSON, already parsed
@@ -119,8 +182,7 @@ fn live_smoke() {
     let mut server = Server::start();
 
     // Handshake, then register the contact email every data tool needs.
-    let init = server.request("initialize", json!({ "protocolVersion": "2025-06-18" }));
-    assert_eq!(init["result"]["serverInfo"]["name"], "sec-mcp", "init: {init}");
+    server.handshake("2025-06-18");
     server.call_tool("sec_configure", json!({ "contact_email": email }));
 
     // Ticker → CIK: the resolved form is 10-digit, zero-padded, no prefix.
@@ -150,7 +212,11 @@ fn live_smoke() {
     );
     let rows = filings["filings"].as_array().expect("filings array");
     assert!(!rows.is_empty(), "expected at least one 10-K: {filings}");
-    assert_eq!(rows[0]["form"].as_str(), Some("10-K"), "first row form: {filings}");
+    assert_eq!(
+        rows[0]["form"].as_str(),
+        Some("10-K"),
+        "first row form: {filings}"
+    );
 
     // Cross-company frame on a COMPOUND unit — the 0.4.2 regression guard. A
     // per-share concept must reach the API as `.../USD-per-shares/...`; the old
@@ -185,5 +251,99 @@ fn live_smoke() {
     assert!(
         assets["data"].as_array().is_some_and(|a| !a.is_empty()),
         "instant frame returned no rows: {assets}"
+    );
+}
+
+/// The MCP `2026-07-28` surface. Offline: every assertion below is answered by
+/// the protocol layer without touching EDGAR, so this runs on every `cargo test`
+/// and is the regression guard for the port off the hand-rolled JSON-RPC layer.
+#[test]
+fn protocol_surface() {
+    // ── Negotiation ──────────────────────────────────────────────────────────
+    // The server offers 2026-07-28 and still meets older clients where they are.
+    let mut server = Server::start();
+    assert_eq!(server.handshake("2026-07-28"), "2026-07-28");
+    drop(server);
+
+    let mut server = Server::start();
+    assert_eq!(server.handshake("2025-11-25"), "2025-11-25");
+
+    // `resultType` is a 2026-07-28 field: it must be absent for an older peer,
+    // which is what tells us rmcp is version-gating results rather than always
+    // emitting them.
+    let listed = server.request("tools/list", json!({}));
+    assert!(
+        listed["result"]["resultType"].is_null(),
+        "resultType must be omitted for a 2025-11-25 peer: {listed}"
+    );
+    drop(server);
+
+    // ── Stateless path ───────────────────────────────────────────────────────
+    // 2026-07-28 drops the handshake: a request carrying its own `_meta` is a
+    // valid opener. `server/discover` is mandatory in this revision — it was a
+    // `-32601 method not found` before the port.
+    let meta = json!({ "_meta": meta_block() });
+
+    let mut server = Server::start();
+    let discover = server.request("server/discover", meta.clone());
+    assert!(
+        discover["error"].is_null(),
+        "server/discover must be implemented: {discover}"
+    );
+    let versions = discover["result"]["supportedVersions"]
+        .as_array()
+        .unwrap_or_else(|| panic!("discover: no supportedVersions in {discover}"));
+    assert!(
+        versions.iter().any(|v| v == "2026-07-28"),
+        "discover must advertise 2026-07-28: {discover}"
+    );
+    // Identity comes from this crate, not the SDK — `Implementation::from_build_env`
+    // would name rmcp here.
+    assert_eq!(
+        discover["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"], "sec-mcp",
+        "discover serverInfo: {discover}"
+    );
+
+    // ── tools/list on the stateless path ─────────────────────────────────────
+    let listed = server.request("tools/list", meta);
+    let result = &listed["result"];
+    assert_eq!(result["resultType"], "complete", "tools/list: {listed}");
+    // SEP-2549 cache hints. `private`, not `public`: the listing reflects this
+    // machine's configuration state.
+    assert!(
+        result["ttlMs"].as_u64().is_some_and(|t| t > 0),
+        "tools/list must carry a positive ttlMs: {listed}"
+    );
+    assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
+
+    let tools = result["tools"].as_array().expect("tools array");
+    assert_eq!(tools.len(), 8, "expected 8 tools: {listed}");
+
+    // The server sandbox starts unconfigured, so `sec_configure` must carry the
+    // first-run wording rather than the steady-state text.
+    let configure = tools
+        .iter()
+        .find(|t| t["name"] == "sec_configure")
+        .unwrap_or_else(|| panic!("sec_configure missing: {listed}"));
+    assert!(
+        configure["description"]
+            .as_str()
+            .is_some_and(|d| d.starts_with("REQUIRED SETUP")),
+        "unconfigured sec_configure description: {configure}"
+    );
+
+    // ── Unconfigured guard ───────────────────────────────────────────────────
+    // A data tool without a contact email fails as a *successful* result marked
+    // `isError`, not a JSON-RPC error, so the model can read it and recover.
+    // `_meta` rides on *every* request once the session is on the stateless
+    // path — there is no handshake to carry it.
+    let mut call = json!({ "name": "sec_lookup_cik", "arguments": { "ticker": "AAPL" } });
+    call["_meta"] = meta_block();
+    let resp = server.request("tools/call", call);
+    assert_eq!(resp["result"]["isError"], true, "expected isError: {resp}");
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        text.contains("not configured"),
+        "expected the unconfigured guard, got: {text}"
     );
 }

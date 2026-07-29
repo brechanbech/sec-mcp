@@ -8,6 +8,44 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-29
+
+### Added
+- Support for MCP protocol revision **2026-07-28**. The server now implements
+  `server/discover` (mandatory in that revision — previously it answered
+  `-32601 method not found`), serves the stateless request path where a client
+  skips the handshake and self-describes via `_meta`, tags results with
+  `resultType`, and advertises SEP-2549 cache hints on `tools/list`
+  (`ttlMs` 5 min, `cacheScope: private` — the listing reflects this machine's
+  configuration state, so it is not shareable between users). Revisions back to
+  `2024-11-05` continue to negotiate as before.
+- An offline `protocol_surface` test covering all of the above. It needs no
+  network, so `cargo test` now has real protocol coverage rather than skipping
+  everything without `SEC_MCP_LIVE_EMAIL`.
+
+### Changed
+- **The JSON-RPC layer is now the [`rmcp`](https://crates.io/crates/rmcp) SDK
+  rather than hand-rolled.** Framing, version negotiation, `server/discover`,
+  and `resultType` come from the SDK, so future protocol revisions are a
+  dependency bump instead of hand-written conformance work. Tool names,
+  descriptions, input schemas, result shapes, and every EDGAR call are
+  unchanged.
+- Tool input schemas are derived from Rust types by `schemars` instead of being
+  written by hand. Two incidental differences: the integer `limit` fields now
+  also carry `format: uint64` / `minimum: 0` (a tightening — negative values
+  were never meaningful and previously fell back to the default), and each
+  schema carries a `$schema` key.
+- `tools/list` returns tools in a deterministic (alphabetical) order, which the
+  2026-07-28 revision recommends so clients can cache the listing.
+- **MSRV is now 1.88** (from 1.86), matching `rmcp` 3's own requirement.
+
+### Fixed
+- The server identified itself as `rmcp`/its SDK version rather than `sec-mcp`
+  in the handshake — latent before, and newly visible through `server/discover`.
+- `initialize` requests missing the spec-required `capabilities` or `clientInfo`
+  are now rejected rather than silently accepted. Every real MCP client sends
+  both; only the crate's own smoke test relied on the old leniency.
+
 ## [0.4.4] - 2026-07-21
 
 ### Changed
