@@ -8,6 +8,27 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Fixed
+- **`sec_financial_concept`'s period filter returned nothing for foreign private
+  issuers.** XBRL is not a US-domestic-only dataset — the SEC extracts facts from
+  "10-Q, 10-K, 8-K, 20-F, 40-F, 6-K, and their variants" — but the filter matched
+  `10-K` and `10-Q` exactly. A foreign filer reporting on `20-F`/`40-F`/`6-K` was
+  therefore filtered down to an empty set, which reads as "this company reports
+  nothing" rather than "wrong filter". `annual` now also matches `20-F`/`40-F`
+  and `quarterly` also matches `6-K`. Measured on Novartis (295 `ifrs-full`
+  concepts, filed on 6-K): `quarterly` returned 0 rows before, 3 after. Domestic
+  filers are unaffected — amendments (`10-K/A`) stay excluded, as before, so a
+  restated period is not counted twice.
+
+### Added
+- When a period filter matches none of a concept's facts, the result carries
+  `available_forms` and a `note` naming the forms the facts are actually filed
+  on. This turns a silent empty result into a self-correcting one, and covers
+  the ordinary case too — asking Apple for `Revenues` quarterly now reports that
+  the concept is only tagged on 10-K.
+- `docs/roadmap.md`, recording candidate EDGAR capabilities that are currently
+  out of scope.
+
 ## [0.5.0] - 2026-07-29
 
 ### Added

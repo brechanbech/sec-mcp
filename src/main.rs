@@ -326,7 +326,7 @@ struct FinancialConceptParams {
     #[serde(default)]
     #[schemars(with = "String", extend("default" = "us-gaap"))]
     taxonomy: Option<String>,
-    /// Filter by period: 'annual' (10-K) or 'quarterly' (10-Q)
+    /// Filter by period: 'annual' (10-K, or 20-F/40-F for foreign filers) or 'quarterly' (10-Q, or 6-K for foreign filers)
     //
     // A plain string with an `enum` constraint rather than a Rust enum: the
     // handler already treats anything other than `annual`/`quarterly` as "no
@@ -390,6 +390,30 @@ struct XbrlFramesParams {
 }
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
+
+/// Forms carrying a filer's *annual* figures.
+///
+/// XBRL is not a US-domestic-only dataset: the SEC extracts facts from "10-Q,
+/// 10-K, 8-K, 20-F, 40-F, 6-K, and their variants". A foreign private issuer
+/// files `20-F` (or `40-F` under the Canadian MJDS) where a domestic filer
+/// files `10-K`, so matching `10-K` alone silently returns nothing for them.
+///
+/// Amendments (`10-K/A`, `20-F/A`) are deliberately excluded: an amendment
+/// restates a period already present, so admitting both would emit two facts
+/// for the same period.
+fn is_annual_form(form: Option<&str>) -> bool {
+    matches!(form, Some("10-K" | "20-F" | "40-F"))
+}
+
+/// Forms carrying a filer's *interim* figures — `10-Q` domestically, `6-K` for
+/// foreign private issuers. See [`is_annual_form`] for why this matters.
+///
+/// `6-K` is broader than `10-Q` (it also carries press releases and other
+/// interim material), but it is where a foreign issuer's quarterly figures are
+/// tagged, so it is the right counterpart here.
+fn is_quarterly_form(form: Option<&str>) -> bool {
+    matches!(form, Some("10-Q" | "6-K"))
+}
 
 /// Append row-shaped filings from one column-major submissions block into
 /// `out`, honoring `form_filter`, until `out` reaches `limit`. The block is
@@ -583,15 +607,31 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let filtered: Vec<&Value> = entries
                 .iter()
                 .filter(|e| match period_filter {
-                    Some("annual") => e["form"].as_str() == Some("10-K"),
-                    Some("quarterly") => e["form"].as_str() == Some("10-Q"),
+                    Some("annual") => is_annual_form(e["form"].as_str()),
+                    Some("quarterly") => is_quarterly_form(e["form"].as_str()),
                     _ => true,
                 })
                 .collect();
 
+            // A filter that matches nothing is indistinguishable from "this
+            // company reports nothing" unless we say otherwise — report which
+            // forms the concept actually carries so the caller can adjust
+            // rather than conclude the data is missing.
+            let unmatched_forms: Vec<String> = if period_filter.is_some() && filtered.is_empty() {
+                let mut forms: Vec<String> = entries
+                    .iter()
+                    .filter_map(|e| e["form"].as_str().map(str::to_owned))
+                    .collect();
+                forms.sort();
+                forms.dedup();
+                forms
+            } else {
+                Vec::new()
+            };
+
             let tail: Vec<&Value> = filtered.iter().rev().take(20).rev().copied().collect();
 
-            Ok(json!({
+            let mut result = json!({
                 "company": entity,
                 "ticker": ticker.to_uppercase(),
                 "cik": cik,
@@ -601,7 +641,19 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 "description": description,
                 "unit": unit_name,
                 "data": tail
-            }))
+            });
+
+            if !unmatched_forms.is_empty() {
+                result["note"] = json!(format!(
+                    "The '{}' filter matched none of this concept's facts. \
+                     They are filed on: {}. Retry without the period filter to see them.",
+                    period_filter.unwrap_or(""),
+                    unmatched_forms.join(", ")
+                ));
+                result["available_forms"] = json!(unmatched_forms);
+            }
+
+            Ok(result)
         }
 
         "sec_company_info" => {

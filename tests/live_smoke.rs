@@ -218,6 +218,43 @@ fn live_smoke() {
         "first row form: {filings}"
     );
 
+    // Foreign private issuer — the 0.5.0 regression guard. XBRL is not
+    // US-domestic-only: Novartis reports `ifrs-full` facts on 6-K, which the
+    // old `form == "10-Q"` filter excluded, so `quarterly` came back empty and
+    // read as "this company reports nothing".
+    let fpi = server.call_tool(
+        "sec_financial_concept",
+        json!({
+            "ticker": "NVS",
+            "concept": "AccountingProfit",
+            "taxonomy": "ifrs-full",
+            "period": "quarterly"
+        }),
+    );
+    let fpi_rows = fpi["data"].as_array().expect("fpi data array");
+    assert!(
+        !fpi_rows.is_empty(),
+        "foreign filer's quarterly facts came back empty — the 6-K form mapping is gone: {fpi}"
+    );
+
+    // The same concept has no *annual* facts, and an empty result must say why
+    // rather than look like missing data.
+    let fpi_annual = server.call_tool(
+        "sec_financial_concept",
+        json!({
+            "ticker": "NVS",
+            "concept": "AccountingProfit",
+            "taxonomy": "ifrs-full",
+            "period": "annual"
+        }),
+    );
+    assert!(
+        fpi_annual["available_forms"]
+            .as_array()
+            .is_some_and(|a| !a.is_empty()),
+        "an empty period filter must report the forms actually present: {fpi_annual}"
+    );
+
     // Cross-company frame on a COMPOUND unit — the 0.4.2 regression guard. A
     // per-share concept must reach the API as `.../USD-per-shares/...`; the old
     // percent-encoded `USD%2Fshares` 404'd and this came back empty.
