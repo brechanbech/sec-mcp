@@ -8,6 +8,30 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- **`sec_insider_transactions` — SEC Forms 3, 4 and 5.** Who bought or sold,
+  when, how many shares and at what price, with each insider's name and role.
+  Forms 3/4/5 were already *visible* (they are indexed under the issuer's CIK, so
+  `sec_recent_filings` with `form_type: "4"` lists them) but the tool returned a
+  URL the model could not read; this parses the filings themselves.
+
+  Two pieces of shaping do most of the work. SEC transaction codes are expanded
+  into plain language — a bare `F` reads like a sale when it actually means
+  shares the issuer withheld to cover tax on vesting — and the footnotes each
+  transaction references are resolved inline, which is where filers put the
+  context that distinguishes a Rule 10b5-1 sale from an automatic settlement.
+
+  Form 3 reports *initial holdings* rather than transactions, so results carry
+  both `transactions` and `holdings`; a Form 3 is never an empty result.
+
+  Takes `ticker`, an optional `form_type` (`3`/`4`/`5`), and `limit` (default 5,
+  max 20). Each filing costs one request, issued sequentially, well inside SEC's
+  10/sec fair-access limit. One unreadable document is reported in place rather
+  than failing the whole call.
+- `roxmltree` — the crate's first XML dependency, needed because ownership forms
+  are XML rather than JSON. Its only required dependency, `memchr`, was already
+  in the tree.
+
 ### Fixed
 - **`sec_financial_concept`'s period filter returned nothing for foreign private
   issuers.** XBRL is not a US-domestic-only dataset — the SEC extracts facts from

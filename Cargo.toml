@@ -31,6 +31,10 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "cha
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 anyhow = "1"
 urlencoding = "2"
+# Forms 3/4/5 are XML, not JSON. roxmltree is a read-only DOM whose only required
+# dependency is `memchr`, already in the tree — so no new transitive deps on a
+# crate that deliberately avoids build-time C.
+roxmltree = "0.21"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "1"

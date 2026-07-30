@@ -101,7 +101,11 @@ impl EdgarClient {
         })
     }
 
-    async fn get_json(&self, url: &str) -> Result<Value> {
+    /// Issue a GET and map any non-2xx into an actionable error.
+    ///
+    /// Shared by [`Self::get_json`] and [`Self::get_text`] so both inherit the
+    /// same User-Agent, gzip handling, timeout, and rate-limit messaging.
+    async fn get(&self, url: &str) -> Result<reqwest::Response> {
         let resp = self
             .http
             .get(url)
@@ -120,9 +124,24 @@ impl EdgarClient {
                 _ => anyhow::bail!("SEC EDGAR returned {status} for {url}: {snippet}"),
             }
         }
-        resp.json()
+        Ok(resp)
+    }
+
+    async fn get_json(&self, url: &str) -> Result<Value> {
+        self.get(url)
+            .await?
+            .json()
             .await
             .with_context(|| format!("failed to parse JSON response from {url}"))
+    }
+
+    /// Fetch a document as text. Ownership forms (3/4/5) are XML, not JSON.
+    async fn get_text(&self, url: &str) -> Result<String> {
+        self.get(url)
+            .await?
+            .text()
+            .await
+            .with_context(|| format!("failed to read response body from {url}"))
     }
 
     async fn ticker_map(&self) -> Result<HashMap<String, String>> {
@@ -366,6 +385,20 @@ struct CompanyFactsParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct InsiderTransactionsParams {
+    /// Stock ticker symbol
+    ticker: String,
+    /// Number of insider filings to read (default 5, max 20). Each filing is one insider's report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 5))]
+    limit: Option<u64>,
+    /// Optional filter: '4' (changes in ownership — the usual choice), '3' (initial ownership, holdings only) or '5' (annual catch-up). Omit for all three.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String", extend("enum" = ["3", "4", "5"]))]
+    form_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct XbrlFramesParams {
     /// XBRL concept name, e.g. 'Revenues', 'NetIncomeLoss', 'Assets'
     concept: String,
@@ -387,6 +420,198 @@ struct XbrlFramesParams {
     #[serde(default)]
     #[schemars(with = "u64", extend("default" = 20))]
     limit: Option<u64>,
+}
+
+// ── Ownership forms (3/4/5) ───────────────────────────────────────────────────
+//
+// Forms 3 (initial ownership), 4 (changes) and 5 (annual catch-up) share one
+// `ownershipDocument` schema. Form 3 carries *holdings*; 4 and 5 carry
+// *transactions* — so both are emitted, and a Form 3 is never an empty result.
+
+/// Expansion of an SEC transaction code. Returns `None` for codes not in the
+/// common set, so the caller can fall back to the raw letter.
+///
+/// Worth doing: a bare `F` reads like a sale, when it actually means shares the
+/// issuer withheld to cover tax on vesting. Codes are defined in the Form 4
+/// instructions.
+fn transaction_code_label(code: &str) -> Option<&'static str> {
+    Some(match code {
+        "P" => "open-market or private purchase",
+        "S" => "open-market or private sale",
+        "A" => "grant, award or other acquisition from the issuer",
+        "D" => "disposition back to the issuer",
+        "F" => "shares withheld by the issuer to cover tax withholding (not a market sale)",
+        "M" => "exercise or settlement of a derivative — e.g. RSU vesting",
+        "C" => "conversion of a derivative security",
+        "X" => "exercise of an in-the-money or at-the-money derivative",
+        "G" => "bona fide gift",
+        "J" => "other acquisition or disposition — see footnotes",
+        _ => return None,
+    })
+}
+
+/// Text of the first descendant named `tag`, unwrapping SEC's `<value>` box.
+///
+/// Ownership documents are inconsistent about that box: most leaves nest their
+/// content (`<transactionShares><value>30104</value></transactionShares>`) but
+/// `transactionCode` carries its text directly. Try the wrapper, fall back to
+/// the element's own text, and treat whitespace-only as absent.
+fn field(parent: roxmltree::Node, tag: &str) -> Option<String> {
+    let el = parent.descendants().find(|n| n.has_tag_name(tag))?;
+    let text = el
+        .children()
+        .find(|c| c.has_tag_name("value"))
+        .and_then(|v| v.text())
+        .or_else(|| el.text())?;
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
+/// A numeric [`field`], or `None` when absent or unparseable.
+///
+/// Absent is the normal case, not an error: a Code M settlement has no price
+/// per share, carrying only a footnote reference where the value would be.
+fn number(parent: roxmltree::Node, tag: &str) -> Option<f64> {
+    field(parent, tag)?.replace(',', "").parse().ok()
+}
+
+/// A boolean [`field`]. Filers write both `true`/`false` and `1`/`0`, and omit
+/// flags that are false — so absent means false, not missing.
+fn flag(parent: roxmltree::Node, tag: &str) -> bool {
+    matches!(field(parent, tag).as_deref(), Some("true" | "1"))
+}
+
+/// Footnote text referenced from within `node`, in document order, deduplicated.
+fn footnotes_for(node: roxmltree::Node, notes: &HashMap<String, String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for id in node
+        .descendants()
+        .filter(|n| n.has_tag_name("footnoteId"))
+        .filter_map(|n| n.attribute("id"))
+    {
+        if let Some(text) = notes.get(id) {
+            if !out.contains(text) {
+                out.push(text.clone());
+            }
+        }
+    }
+    out
+}
+
+fn parse_transaction(
+    node: roxmltree::Node,
+    derivative: bool,
+    notes: &HashMap<String, String>,
+) -> Value {
+    let code = field(node, "transactionCode");
+    json!({
+        "derivative": derivative,
+        "security": field(node, "securityTitle"),
+        "date": field(node, "transactionDate"),
+        "code": code,
+        "code_label": code.as_deref().and_then(transaction_code_label),
+        "shares": number(node, "transactionShares"),
+        "price_per_share": number(node, "transactionPricePerShare"),
+        "acquired_or_disposed": field(node, "transactionAcquiredDisposedCode"),
+        "shares_owned_after": number(node, "sharesOwnedFollowingTransaction"),
+        "direct_or_indirect": field(node, "directOrIndirectOwnership"),
+        "footnotes": footnotes_for(node, notes),
+    })
+}
+
+fn parse_holding(
+    node: roxmltree::Node,
+    derivative: bool,
+    notes: &HashMap<String, String>,
+) -> Value {
+    json!({
+        "derivative": derivative,
+        "security": field(node, "securityTitle"),
+        "shares_owned": number(node, "sharesOwnedFollowingTransaction"),
+        "direct_or_indirect": field(node, "directOrIndirectOwnership"),
+        "underlying_security": field(node, "underlyingSecurityTitle"),
+        "exercise_price": number(node, "conversionOrExercisePrice"),
+        "expiration_date": field(node, "expirationDate"),
+        "footnotes": footnotes_for(node, notes),
+    })
+}
+
+/// Parse a Form 3/4/5 `ownershipDocument` into the slim shape the tools return.
+///
+/// # Errors
+/// `internal_error` if the document is not well-formed XML.
+fn parse_ownership_document(xml: &str) -> Result<Value> {
+    let doc = roxmltree::Document::parse(xml)
+        .context("ownership form was not well-formed XML — EDGAR may have changed the document")?;
+    let root = doc.root_element();
+
+    let notes: HashMap<String, String> = root
+        .descendants()
+        .filter(|n| n.has_tag_name("footnote"))
+        .filter_map(|n| Some((n.attribute("id")?.to_owned(), n.text()?.trim().to_owned())))
+        .collect();
+
+    // Joint filings carry more than one reporting owner, so collect them all
+    // rather than taking the first and silently dropping the rest.
+    let insiders: Vec<Value> = root
+        .descendants()
+        .filter(|n| n.has_tag_name("reportingOwner"))
+        .map(|owner| {
+            json!({
+                "name": field(owner, "rptOwnerName"),
+                "cik": field(owner, "rptOwnerCik"),
+                "is_officer": flag(owner, "isOfficer"),
+                "officer_title": field(owner, "officerTitle"),
+                "is_director": flag(owner, "isDirector"),
+                "is_ten_percent_owner": flag(owner, "isTenPercentOwner"),
+                "is_other": flag(owner, "isOther"),
+            })
+        })
+        .collect();
+
+    let mut transactions: Vec<Value> = Vec::new();
+    let mut holdings: Vec<Value> = Vec::new();
+    for node in root.descendants() {
+        if node.has_tag_name("nonDerivativeTransaction") {
+            transactions.push(parse_transaction(node, false, &notes));
+        } else if node.has_tag_name("derivativeTransaction") {
+            transactions.push(parse_transaction(node, true, &notes));
+        } else if node.has_tag_name("nonDerivativeHolding") {
+            holdings.push(parse_holding(node, false, &notes));
+        } else if node.has_tag_name("derivativeHolding") {
+            holdings.push(parse_holding(node, true, &notes));
+        }
+    }
+
+    Ok(json!({
+        "form": field(root, "documentType"),
+        "period_of_report": field(root, "periodOfReport"),
+        "issuer": {
+            "name": field(root, "issuerName"),
+            "cik": field(root, "issuerCik"),
+            "ticker": field(root, "issuerTradingSymbol"),
+        },
+        "insiders": insiders,
+        "transactions": transactions,
+        "holdings": holdings,
+    }))
+}
+
+/// Turn a submissions `primaryDocument` into the URL of the *raw* XML.
+///
+/// Submissions points at the XSL-rendered view — `xslF345X06/wk-form4_1783.xml`
+/// — and the raw document is the same path with that segment removed. Both
+/// halves vary: the filename is chosen by the filing agent (`form4.xml`,
+/// `doc4.xml`, `tm2614845-1_4seq1.xml`, `wk-form4_….xml`) and the prefix by
+/// schema era (`xslF345X02` … `X06`), so the segment is stripped generically
+/// rather than matched against a fixed string.
+fn ownership_xml_url(cik_num: &str, accession: &str, primary_document: &str) -> String {
+    let acc_nodash = accession.replace('-', "");
+    let raw_doc = primary_document
+        .split_once('/')
+        .filter(|(prefix, _)| prefix.starts_with("xsl"))
+        .map_or(primary_document, |(_, name)| name);
+    format!("https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{raw_doc}")
 }
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
@@ -833,6 +1058,115 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             }))
         }
 
+        "sec_insider_transactions" => {
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, 20) as usize;
+            let form_filter = args["form_type"].as_str().map(|s| s.to_string());
+
+            let cik = client.cik_for_ticker(&ticker).await?;
+            let data = client.recent_filings(&cik).await?;
+            let cik_num = cik.trim_start_matches('0').to_string();
+
+            // Ownership forms are indexed under the *issuer* as well as the
+            // insider, so the company's own submissions carry them. Same
+            // column-major layout as `collect_filings` reads.
+            let block = &data["filings"]["recent"];
+            let col = |key: &str| block[key].as_array();
+            let cell = |arr: Option<&Vec<Value>>, i: usize| {
+                arr.and_then(|a| a.get(i))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string()
+            };
+            let dates = col("filingDate");
+            let accs = col("accessionNumber");
+            let docs = col("primaryDocument");
+
+            let mut selected: Vec<(String, String, String, String)> = Vec::new();
+            if let Some(forms) = col("form") {
+                for (i, f) in forms.iter().enumerate() {
+                    if selected.len() >= limit {
+                        break;
+                    }
+                    let form = f.as_str().unwrap_or("");
+                    // A bare form filter is exact; absent means all three.
+                    let wanted = match form_filter.as_deref() {
+                        Some(want) => form == want,
+                        None => matches!(form, "3" | "4" | "5"),
+                    };
+                    if wanted {
+                        selected.push((
+                            form.to_string(),
+                            cell(dates, i),
+                            cell(accs, i),
+                            cell(docs, i),
+                        ));
+                    }
+                }
+            }
+
+            // One request per filing, sequentially — SEC's fair-access limit is
+            // 10/sec and `limit` is capped at 20, so ordinary latency keeps us
+            // well inside it.
+            let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
+            for (form, filed, accession, primary_document) in selected {
+                let url = ownership_xml_url(&cik_num, &accession, &primary_document);
+                let parsed = client
+                    .get_text(&url)
+                    .await
+                    .and_then(|xml| parse_ownership_document(&xml));
+
+                match parsed {
+                    Ok(mut doc) => {
+                        // Submissions is authoritative for the form label: the
+                        // document says "4" even for an amendment filed as 4/A.
+                        doc["form"] = json!(form);
+                        doc["filed"] = json!(filed);
+                        doc["accession"] = json!(accession);
+                        doc["url"] = json!(url);
+                        filings.push(doc);
+                    }
+                    // One unreadable document shouldn't lose the others.
+                    Err(e) => {
+                        debug!("could not read ownership form {accession}: {e:#}");
+                        filings.push(json!({
+                            "form": form,
+                            "filed": filed,
+                            "accession": accession,
+                            "url": url,
+                            "error": format!("{e:#}"),
+                        }));
+                    }
+                }
+            }
+
+            let mut result = json!({
+                "company": data["name"],
+                "ticker": ticker.to_uppercase(),
+                "cik": cik,
+                "returned": filings.len(),
+                "filings": filings,
+            });
+
+            if result["filings"].as_array().is_some_and(Vec::is_empty) {
+                result["note"] = json!(match form_filter.as_deref() {
+                    Some(want) => format!(
+                        "No form {want} filings in this company's recent submissions window. \
+                         Omit form_type to look for forms 3, 4 and 5 together."
+                    ),
+                    None => "No forms 3, 4 or 5 in this company's recent submissions window — \
+                             it may have no reporting insiders, or none have filed recently."
+                        .to_string(),
+                });
+            }
+
+            Ok(result)
+        }
+
         _ => anyhow::bail!("unknown tool: {}", name),
     }
 }
@@ -958,6 +1292,16 @@ impl SecMcp {
         Parameters(params): Parameters<CompanyFactsParams>,
     ) -> Result<CallToolResult, McpError> {
         Ok(self.call("sec_company_facts", &params).await)
+    }
+
+    #[tool(
+        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'."
+    )]
+    async fn sec_insider_transactions(
+        &self,
+        Parameters(params): Parameters<InsiderTransactionsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(self.call("sec_insider_transactions", &params).await)
     }
 
     #[tool(

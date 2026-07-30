@@ -55,21 +55,67 @@ markup? extract sections? paginate?). That is the same problem README point 4
 already solves for JSON responses, but materially harder for prose. Do not start
 this without deciding the shaping strategy first.
 
-## 3. Insider transactions (Forms 3/4/5)
+## 3. Insider transactions (Forms 3/4/5) — **done**
 
-Visible in `submissions` today but unparsed. Form 4 is well-specified structured
-XML: who bought or sold, when, how much, at what price. "Has anyone at this
-company been selling?" is an ordinary question sec-mcp cannot currently answer.
+Shipped as `sec_insider_transactions` (30 July 2026). The XML-parser cost noted
+below is now paid: `roxmltree` is in the tree and `EdgarClient::get_text` exists,
+so any future work needing a non-JSON document starts from there. The notes below
+are kept as the record of what the implementation had to handle.
 
-**Effort: moderate.** Parse a defined XML schema into slim JSON — the same shape
-of work as the existing XBRL response shaping, against a more stable input.
+Answers "has anyone at this company been buying or selling?" — an ordinary
+question sec-mcp could not previously answer.
+
+**Discovery already works.** Forms 3/4/5 are indexed under the *issuer's* CIK as
+well as the insider's, so `sec_recent_filings` with `form_type: "4"` already
+returns them (verified on AAPL, 30 July 2026). What is missing is reading the
+document behind the URL.
+
+**The payload is about as friendly as XML gets** — ~7.7 KB, flat and
+self-describing:
+
+```
+issuer:         issuerCik / issuerName / issuerTradingSymbol
+reportingOwner: rptOwnerCik / rptOwnerName / isOfficer / officerTitle
+transactions:   transactionDate / transactionCode / transactionShares
+                transactionPricePerShare / sharesOwnedFollowingTransaction
+```
+
+Note the filing URL in `sec_recent_filings` points at the XSL-rendered form
+(`…/xslF345X06/form4.xml`); the raw XML is the same path with that segment
+removed.
+
+**Effort: low-to-moderate**, but it carries two firsts for this crate: the first
+**XML parser** dependency (`quick-xml` or `roxmltree` — everything today is
+`serde_json`) and the first **non-JSON fetch** (`RestClient::get_json` against
+`data.sec.gov`; this pulls text from `www.sec.gov/Archives`). Those costs are
+shared with item 4, so doing this first makes 13F cheaper later.
 
 ## 4. 13F institutional holdings
 
-Quarterly holdings disclosures from institutional managers. Same character as
-item 3: structured, defined, parse-and-slim. Answers "who holds this stock".
+**Not low-hanging — and not for parsing reasons.** The information table is
+regular XML (`nameOfIssuer`, `titleOfClass`, `cusip`, `value`, `sshPrnamt`,
+voting authority; ~45 KB / 90 positions for Berkshire's 2026-05-15 filing). The
+obstacles are elsewhere, and two of the three sit outside the code:
 
-**Effort: moderate.**
+1. **The useful direction is the expensive one.** A 13F is filed *by the
+   manager*, listing what they hold. "What does manager X hold?" is a simple
+   lookup by CIK. "Who holds AAPL?" — the question people actually want — means
+   scanning every manager's filing, thousands per quarter. There is no
+   holder-by-security index.
+2. **sec-mcp cannot identify most managers.** It is ticker-driven, and most
+   institutional managers have no ticker: `sec_lookup_cik("Bridgewater
+   Associates")` fails. Berkshire works only because it happens to be listed.
+   This needs a name→CIK path the server does not have (SEC's
+   `cik-lookup-data.txt` would serve, at the cost of another dataset to fetch
+   and cache).
+3. **Holdings are keyed by CUSIP, and CUSIP is licensed.** The table carries no
+   ticker. CUSIP Global Services is operated by FactSet on behalf of the ABA, so
+   there is no free SEC-published CUSIP→ticker crosswalk. Even "does Berkshire
+   hold Apple?" degrades to fuzzy-matching `nameOfIssuer` text.
+
+**If revisited, scope it honestly to the tractable half**: "what does manager X
+hold", taking a CIK, reporting issuer names as filed. That is a real capability,
+but a much smaller promise than "who holds this stock".
 
 ## Explicitly rejected
 

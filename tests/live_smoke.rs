@@ -255,6 +255,53 @@ fn live_smoke() {
         "an empty period filter must report the forms actually present: {fpi_annual}"
     );
 
+    // Insider transactions: the Form 4 XML is fetched and parsed, not just
+    // linked. Guards the URL rule (submissions points at the XSL-rendered path;
+    // the raw document is that path with the `xsl…/` segment stripped) and the
+    // transaction-code expansion.
+    let insider = server.call_tool(
+        "sec_insider_transactions",
+        json!({ "ticker": "AAPL", "form_type": "4", "limit": 2 }),
+    );
+    let insider_filings = insider["filings"].as_array().expect("filings array");
+    assert!(
+        !insider_filings.is_empty(),
+        "expected recent AAPL Form 4s: {insider}"
+    );
+    let first = &insider_filings[0];
+    assert!(
+        first["error"].is_null(),
+        "could not read the Form 4 document — the xsl-strip URL rule may be broken: {first}"
+    );
+    assert!(
+        first["insiders"][0]["name"]
+            .as_str()
+            .is_some_and(|n| !n.is_empty()),
+        "expected a named reporting owner: {first}"
+    );
+    let txns = first["transactions"]
+        .as_array()
+        .expect("transactions array");
+    assert!(!txns.is_empty(), "expected Form 4 transactions: {first}");
+    assert!(
+        txns.iter().all(|t| t["code"].as_str().is_some()),
+        "every transaction needs a code: {first}"
+    );
+
+    // Form 3 reports holdings, not transactions. An empty `transactions` array
+    // must not mean an empty result — the same silent-empty failure fixed in
+    // the period filter.
+    let form3 = server.call_tool(
+        "sec_insider_transactions",
+        json!({ "ticker": "NVDA", "form_type": "3", "limit": 1 }),
+    );
+    if let Some(f) = form3["filings"].as_array().and_then(|a| a.first()) {
+        assert!(
+            f["holdings"].as_array().is_some_and(|h| !h.is_empty()),
+            "a Form 3 must report holdings rather than nothing: {f}"
+        );
+    }
+
     // Cross-company frame on a COMPOUND unit — the 0.4.2 regression guard. A
     // per-share concept must reach the API as `.../USD-per-shares/...`; the old
     // percent-encoded `USD%2Fshares` 404'd and this came back empty.
@@ -354,7 +401,7 @@ fn protocol_surface() {
     assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
 
     let tools = result["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 8, "expected 8 tools: {listed}");
+    assert_eq!(tools.len(), 9, "expected 9 tools: {listed}");
 
     // The server sandbox starts unconfigured, so `sec_configure` must carry the
     // first-run wording rather than the steady-state text.
