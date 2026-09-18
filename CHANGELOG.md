@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
-## [Unreleased]
+## [0.5.1] - 2026-09-18
 
 ### Added
 - **`sec_insider_transactions` — SEC Forms 3, 4 and 5.** Who bought or sold,
@@ -31,6 +31,13 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 - `roxmltree` — the crate's first XML dependency, needed because ownership forms
   are XML rather than JSON. Its only required dependency, `memchr`, was already
   in the tree.
+- When a period filter matches none of a concept's facts, the result carries
+  `available_forms` and a `note` naming the forms the facts are actually filed
+  on. This turns a silent empty result into a self-correcting one, and covers
+  the ordinary case too — asking Apple for `Revenues` quarterly now reports that
+  the concept is only tagged on 10-K.
+- `docs/roadmap.md`, recording candidate EDGAR capabilities that are currently
+  out of scope.
 
 ### Fixed
 - **`sec_financial_concept`'s period filter returned nothing for foreign private
@@ -43,15 +50,6 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   concepts, filed on 6-K): `quarterly` returned 0 rows before, 3 after. Domestic
   filers are unaffected — amendments (`10-K/A`) stay excluded, as before, so a
   restated period is not counted twice.
-
-### Added
-- When a period filter matches none of a concept's facts, the result carries
-  `available_forms` and a `note` naming the forms the facts are actually filed
-  on. This turns a silent empty result into a self-correcting one, and covers
-  the ordinary case too — asking Apple for `Revenues` quarterly now reports that
-  the concept is only tagged on 10-K.
-- `docs/roadmap.md`, recording candidate EDGAR capabilities that are currently
-  out of scope.
 
 ### Security
 - **rustls 0.23.40 → 0.23.45** (lockfile only), clearing RUSTSEC-2026-0285: TLS

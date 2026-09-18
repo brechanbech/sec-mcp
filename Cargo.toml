@@ -1,6 +1,6 @@
 [package]
 name = "sec-mcp"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 # 1.88: rmcp 3 declares this as its own MSRV.
 rust-version = "1.88"
