@@ -198,6 +198,53 @@ impl EdgarClient {
         self.get_json(&url).await
     }
 
+    /// Search the **body text** of every filing since 2001, exhibits included.
+    ///
+    /// This is the one endpoint here that SEC does not document: it is the API
+    /// behind the EDGAR full-text search UI, on `efts.sec.gov` rather than
+    /// `data.sec.gov`, and it is absent from the published APIs page — so it
+    /// carries no stability guarantee. It earns its place because it inverts
+    /// every other tool in this crate: those need you to already know the
+    /// company, this one finds companies by what they said. `live_smoke`
+    /// asserts on its response shape so that drift surfaces as a failing test
+    /// rather than as a confusing empty result.
+    ///
+    /// Parameters are the UI's own: `q` (quote the string for a phrase match),
+    /// `forms`, `ciks`, `startdt`/`enddt`, and `from` for paging. The response
+    /// is Elasticsearch-shaped; `hits.total.value` saturates at 10000.
+    async fn full_text_search(
+        &self,
+        query: &str,
+        forms: Option<&str>,
+        ciks: Option<&str>,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+        from: u64,
+    ) -> Result<Value> {
+        let mut url = format!(
+            "https://efts.sec.gov/LATEST/search-index?q={}",
+            urlencoding::encode(query)
+        );
+        // Every optional filter is caller-supplied and therefore model-controlled,
+        // so each is encoded rather than interpolated raw.
+        if let Some(forms) = forms {
+            url.push_str(&format!("&forms={}", urlencoding::encode(forms)));
+        }
+        if let Some(ciks) = ciks {
+            url.push_str(&format!("&ciks={}", urlencoding::encode(ciks)));
+        }
+        if let Some(start) = start_date {
+            url.push_str(&format!("&startdt={}", urlencoding::encode(start)));
+        }
+        if let Some(end) = end_date {
+            url.push_str(&format!("&enddt={}", urlencoding::encode(end)));
+        }
+        if from > 0 {
+            url.push_str(&format!("&from={from}"));
+        }
+        self.get_json(&url).await
+    }
+
     async fn company_concept(&self, cik: &str, taxonomy: &str, concept: &str) -> Result<Value> {
         // `taxonomy` and `concept` are caller-supplied (ultimately model-
         // controlled), so percent-encode them before they enter the path.
@@ -333,6 +380,37 @@ struct RecentFilingsParams {
     #[serde(default)]
     #[schemars(with = "u64", extend("default" = 10))]
     limit: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct FullTextSearchParams {
+    /// Words or phrase to find in filing text. Wrap in double quotes for an
+    /// exact phrase: "climate transition plan". Unquoted terms match separately.
+    query: String,
+    /// Optional filter: '10-K', '8-K', or several comma-separated ('10-K,10-Q')
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    forms: Option<String>,
+    /// Optional: restrict to one company by ticker
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    ticker: Option<String>,
+    /// Optional earliest filing date, YYYY-MM-DD
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    start_date: Option<String>,
+    /// Optional latest filing date, YYYY-MM-DD
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    end_date: Option<String>,
+    /// Number of hits to return (default 10, max 100)
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 10))]
+    limit: Option<u64>,
+    /// Number of hits to skip, for paging past the first page (default 0)
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -597,6 +675,93 @@ fn parse_ownership_document(xml: &str) -> Result<Value> {
     }))
 }
 
+/// Split a full-text-search hit `_id` into its accession and document halves.
+///
+/// The id is `0001628280-26-037664:deck-20260331.htm` — the accession, a colon,
+/// and the document within that filing. Both halves are needed to build a URL,
+/// and a hit without the colon is not addressable, so it is reported rather
+/// than guessed at.
+fn split_hit_id(id: &str) -> Option<(&str, &str)> {
+    id.split_once(':')
+        .filter(|(accession, document)| !accession.is_empty() && !document.is_empty())
+}
+
+/// Pull the ticker out of a full-text-search `display_names` entry.
+///
+/// The entry reads `Apple Inc.  (AAPL)  (CIK 0000320193)`, but the ticker
+/// parenthetical is absent for filers that have none — a private company filing
+/// an S-1, say — so this returns `None` rather than mistaking the CIK group for
+/// a ticker.
+fn ticker_from_display_name(display_name: &str) -> Option<&str> {
+    display_name
+        .rsplit_once(" (CIK ")
+        .map(|(before, _)| before)?
+        .rsplit_once('(')
+        .map(|(_, tail)| tail.trim_end())?
+        .strip_suffix(')')
+        .filter(|ticker| !ticker.is_empty() && !ticker.contains(' '))
+}
+
+/// Project one raw full-text-search hit onto the shape the tool returns.
+///
+/// The raw `_source` carries film numbers, file numbers, SIC codes, XSL paths
+/// and a sequence number that answer nothing a caller asked; what matters is
+/// who filed, what, when, and where to read it. The document URL is built here
+/// because a hit is otherwise a dead end — the id names a document but not its
+/// location.
+fn slim_search_hit(hit: &Value) -> Value {
+    let source = &hit["_source"];
+    let display_name = source["display_names"][0].as_str().unwrap_or_default();
+    let cik = source["ciks"][0].as_str().unwrap_or_default();
+
+    let (accession, document) = hit["_id"].as_str().and_then(split_hit_id).unzip();
+
+    // `cik_num` drops the leading zeros and `acc_nodash` the dashes: the Archives
+    // path uses neither, unlike every data.sec.gov path, which uses both.
+    let url = match (accession, document) {
+        (Some(accession), Some(document)) if !cik.is_empty() => {
+            let cik_num = cik.trim_start_matches('0');
+            let acc_nodash = accession.replace('-', "");
+            Some(format!(
+                "https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{document}"
+            ))
+        }
+        _ => None,
+    };
+
+    let mut out = serde_json::Map::new();
+    out.insert("company".into(), json!(display_name));
+    if let Some(ticker) = ticker_from_display_name(display_name) {
+        out.insert("ticker".into(), json!(ticker));
+    }
+    out.insert("cik".into(), json!(cik));
+    out.insert("form".into(), source["form"].clone());
+    out.insert("filed".into(), source["file_date"].clone());
+    if let Some(period) = source["period_ending"].as_str() {
+        out.insert("period_ending".into(), json!(period));
+    }
+    if let Some(accession) = accession {
+        out.insert("accession".into(), json!(accession));
+    }
+    if let Some(document) = document {
+        out.insert("document".into(), json!(document));
+    }
+    match url {
+        Some(url) => out.insert("url".into(), json!(url)),
+        // Say so explicitly: a hit with no URL is a shape change worth noticing,
+        // not a hit the caller should quietly skip.
+        None => out.insert("url_unavailable".into(), json!(true)),
+    };
+    if let Some(location) = source["biz_locations"][0].as_str() {
+        out.insert("location".into(), json!(location));
+    }
+    // 8-K items are the reason an 8-K was filed, so they carry most of its meaning.
+    if let Some(items) = source["items"].as_array().filter(|i| !i.is_empty()) {
+        out.insert("items".into(), json!(items));
+    }
+    Value::Object(out)
+}
+
 /// Turn a submissions `primaryDocument` into the URL of the *raw* XML.
 ///
 /// Submissions points at the XSL-rendered view — `xslF345X06/wk-form4_1783.xml`
@@ -736,6 +901,66 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                     "https://www.sec.gov/edgar/browse/?CIK={cik}"
                 )
             }))
+        }
+
+        "sec_full_text_search" => {
+            let client = state.read().await.client()?;
+            let query = args["query"].as_str().context("query required")?.trim();
+            if query.is_empty() {
+                anyhow::bail!("query cannot be empty");
+            }
+
+            // 100 is the endpoint's own page size, so a larger limit would
+            // silently return 100 anyway; clamping says so instead.
+            let limit = args["limit"].as_u64().unwrap_or(10).clamp(1, 100);
+            let offset = args["offset"].as_u64().unwrap_or(0);
+
+            // A ticker is friendlier than a 10-digit CIK, and every other tool
+            // here takes one, so resolve it rather than making the caller do it.
+            let ciks = match args["ticker"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+                Some(ticker) => Some(client.cik_for_ticker(ticker).await?),
+                None => None,
+            };
+
+            let body = client
+                .full_text_search(
+                    query,
+                    args["forms"].as_str(),
+                    ciks.as_deref(),
+                    args["start_date"].as_str(),
+                    args["end_date"].as_str(),
+                    offset,
+                )
+                .await?;
+
+            let hits = body["hits"]["hits"].as_array().cloned().unwrap_or_default();
+            let results: Vec<Value> = hits.iter().take(limit as usize).map(slim_search_hit).collect();
+
+            let total = body["hits"]["total"]["value"].as_u64().unwrap_or(0);
+            let relation = body["hits"]["total"]["relation"].as_str().unwrap_or("eq");
+
+            let mut out = serde_json::Map::new();
+            out.insert("query".into(), json!(query));
+            out.insert("total".into(), json!(total));
+            // Elasticsearch saturates the count at 10000 and flags it with
+            // `relation: "gte"`. Reporting 10000 as exact would be a lie, and
+            // this is the kind of quiet distortion a caller builds on.
+            if relation != "eq" {
+                out.insert("total_is_lower_bound".into(), json!(true));
+            }
+            out.insert("returned".into(), json!(results.len()));
+            out.insert("offset".into(), json!(offset));
+            out.insert("results".into(), json!(results));
+            if results.is_empty() {
+                out.insert(
+                    "note".into(),
+                    json!(
+                        "No filings matched. Full-text search covers filing bodies from 2001 \
+                         onward; an exact phrase needs double quotes inside the query string."
+                    ),
+                );
+            }
+            Ok(Value::Object(out))
         }
 
         "sec_recent_filings" => {
@@ -1255,6 +1480,16 @@ impl SecMcp {
     }
 
     #[tool(
+        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Optionally filter by form, ticker and date range. Each hit comes back with a direct URL to the matching document. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`."
+    )]
+    async fn sec_full_text_search(
+        &self,
+        Parameters(params): Parameters<FullTextSearchParams>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(self.call("sec_full_text_search", &params).await)
+    }
+
+    #[tool(
         description = "Get historical values for a financial concept from SEC XBRL data. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'."
     )]
     async fn sec_financial_concept(
@@ -1422,4 +1657,128 @@ async fn main() -> Result<()> {
 
     info!("SEC EDGAR MCP server shutting down");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A hit shaped exactly as `efts.sec.gov` returns one, trimmed to the fields
+    /// the projection reads. Captured live on 18 September 2026.
+    fn sample_hit() -> Value {
+        json!({
+            "_id": "0001628280-26-037664:deck-20260331.htm",
+            "_score": 4.644_698,
+            "_source": {
+                "ciks": ["0000910521"],
+                "display_names": ["DECKERS OUTDOOR CORP  (DECK)  (CIK 0000910521)"],
+                "form": "10-K",
+                "root_forms": ["10-K"],
+                "file_date": "2026-05-22",
+                "period_ending": "2026-03-31",
+                "adsh": "0001628280-26-037664",
+                "biz_locations": ["Goleta, CA"],
+                "sics": ["3021"],
+                "film_num": ["261013223"],
+                "file_num": ["001-36436"],
+                "inc_states": ["DE"],
+                "items": []
+            }
+        })
+    }
+
+    #[test]
+    fn hit_id_splits_into_accession_and_document() {
+        assert_eq!(
+            split_hit_id("0001628280-26-037664:deck-20260331.htm"),
+            Some(("0001628280-26-037664", "deck-20260331.htm"))
+        );
+    }
+
+    #[test]
+    fn an_unaddressable_hit_id_is_rejected() {
+        // No colon, or an empty half: there is no document to point at, and
+        // guessing one would produce a URL that 404s for the caller.
+        for bad in ["0001628280-26-037664", ":deck.htm", "0001628280-26-037664:", ""] {
+            assert_eq!(split_hit_id(bad), None, "{bad:?} should not split");
+        }
+    }
+
+    #[test]
+    fn ticker_is_pulled_out_of_a_display_name() {
+        assert_eq!(
+            ticker_from_display_name("DECKERS OUTDOOR CORP  (DECK)  (CIK 0000910521)"),
+            Some("DECK")
+        );
+        assert_eq!(
+            ticker_from_display_name("Apple Inc.  (AAPL)  (CIK 0000320193)"),
+            Some("AAPL")
+        );
+    }
+
+    /// A filer with no ticker — a private company filing an S-1, say — has only
+    /// the CIK parenthetical, which must not be mistaken for one.
+    #[test]
+    fn a_display_name_without_a_ticker_yields_none() {
+        assert_eq!(
+            ticker_from_display_name("SOME PRIVATE HOLDINGS LLC  (CIK 0001234567)"),
+            None
+        );
+        assert_eq!(ticker_from_display_name(""), None);
+        assert_eq!(ticker_from_display_name("No parentheses at all"), None);
+    }
+
+    #[test]
+    fn a_hit_projects_onto_company_form_and_a_working_url() {
+        let slim = slim_search_hit(&sample_hit());
+
+        assert_eq!(slim["ticker"], "DECK");
+        assert_eq!(slim["cik"], "0000910521");
+        assert_eq!(slim["form"], "10-K");
+        assert_eq!(slim["filed"], "2026-05-22");
+        assert_eq!(slim["period_ending"], "2026-03-31");
+        assert_eq!(slim["accession"], "0001628280-26-037664");
+        assert_eq!(slim["location"], "Goleta, CA");
+
+        // The Archives path takes the CIK without zero-padding and the accession
+        // without dashes — the opposite of every data.sec.gov path.
+        assert_eq!(
+            slim["url"],
+            "https://www.sec.gov/Archives/edgar/data/910521/000162828026037664/deck-20260331.htm"
+        );
+
+        // Verified live: this exact URL returned 200 on 18 September 2026.
+        assert!(slim.get("url_unavailable").is_none());
+    }
+
+    #[test]
+    fn the_noisy_source_fields_are_dropped() {
+        let slim = slim_search_hit(&sample_hit());
+        let rendered = slim.to_string();
+        for noise in ["film_num", "file_num", "sics", "inc_states", "root_forms"] {
+            assert!(!rendered.contains(noise), "{noise} should not survive: {rendered}");
+        }
+        // An empty `items` array says nothing, so it is omitted rather than sent.
+        assert!(slim.get("items").is_none(), "empty items should be omitted");
+    }
+
+    #[test]
+    fn eight_k_items_are_kept_because_they_carry_the_meaning() {
+        let mut hit = sample_hit();
+        hit["_source"]["form"] = json!("8-K");
+        hit["_source"]["items"] = json!(["2.02", "9.01"]);
+
+        let slim = slim_search_hit(&hit);
+        assert_eq!(slim["items"], json!(["2.02", "9.01"]));
+    }
+
+    #[test]
+    fn a_hit_that_cannot_be_addressed_says_so() {
+        let mut hit = sample_hit();
+        hit["_id"] = json!("no-colon-here");
+
+        let slim = slim_search_hit(&hit);
+        assert_eq!(slim["url_unavailable"], json!(true));
+        assert!(slim.get("url").is_none());
+    }
 }

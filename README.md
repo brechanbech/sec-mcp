@@ -72,6 +72,8 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_lookup_cik` | Resolve a ticker symbol to its SEC CIK number |
 | `sec_company_info` | SIC code, industry, state of incorporation, fiscal year end, addresses |
 | `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs — pages into older history automatically when a form-type filter needs it |
+| `sec_full_text_search` | Search the **body text** of filings since 2001, exhibits included — the only tool here that finds companies by what they *said*, rather than needing the company up front. Filter by form, ticker and date; every hit carries a direct document URL |
+| `sec_insider_transactions` | Forms 3, 4 and 5 — who bought or sold, when, how many shares and at what price, with transaction codes in plain language and footnotes resolved |
 | `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) |
 | `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info |
 | `sec_company_facts` | Discover all XBRL concepts (metrics) a company reports |

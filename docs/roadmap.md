@@ -48,7 +48,20 @@ answer is worth an email to FilerTechUnit@sec.gov if it starts to matter.
 weeks before live EDGAR. 26.3 shipped 14 September 2026, so the next quarterly
 is roughly December — **revisit then** (checked 18 September 2026).
 
-## 1. Full-text search
+## 1. Full-text search — **done**
+
+Shipped as `sec_full_text_search` (18 September 2026). The notes below are kept
+as the record of what the implementation had to handle.
+
+The live parameters, confirmed on 18 September 2026, are the UI's own: `q`
+(quote the string for a phrase match), `forms`, `ciks` (zero-padded 10-digit),
+`startdt`/`enddt` as `YYYY-MM-DD`, and `from` for paging. Page size is **100**
+and `hits.total.value` **saturates at 10000** with `relation: "gte"` — the tool
+flags that as `total_is_lower_bound` rather than reporting a saturated count as
+exact. A hit `_id` is `accession:document`, so the Archives URL is constructible
+— note it takes the CIK *without* zero-padding and the accession *without*
+dashes, the opposite of every `data.sec.gov` path. Two generated URLs were
+fetched and returned 200.
 
 `https://efts.sec.gov/LATEST/search-index?q=…&forms=…&dateRange=…`
 

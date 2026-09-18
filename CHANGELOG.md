@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
+## [Unreleased]
+
+### Added
+- **`sec_full_text_search` — search the body text of every filing since 2001,
+  exhibits included.** Every other tool here needs you to already know the
+  company; this one finds companies by what they *said* ("which filers discussed
+  a climate transition plan in a 10-K"), which is a different question than
+  sec-mcp could previously answer at all. Filter by form, ticker and date range;
+  page with `offset`. Each hit is returned with a direct URL to the matching
+  document, built from the hit id — a hit is otherwise a dead end, since the id
+  names a document but not its location.
+
+  Two shaping decisions worth recording. The raw `_source` carries film numbers,
+  file numbers, SIC codes, XSL paths and a sequence number that answer nothing a
+  caller asked, so the projection keeps only who filed, what, when and where to
+  read it; 8-K `items` are kept, because they are the reason an 8-K exists. And
+  `hits.total` saturates at 10000 with `relation: "gte"` — reporting that as an
+  exact count would be a quiet lie, so it comes back flagged as
+  `total_is_lower_bound`.
+
+  **This is the one endpoint sec-mcp calls that SEC does not document.** It is
+  the API behind the EDGAR full-text search UI, on `efts.sec.gov` rather than
+  `data.sec.gov`, and it is absent from the published APIs page, so it carries
+  no stability guarantee. That is a deliberate, bounded risk: `live_smoke` now
+  asserts on its response shape, so drift surfaces as a failing test rather than
+  as a confusing empty result.
+- **Unit tests in `src/main.rs`** — the crate had none, only integration tests.
+  Eight cover the new pure helpers: hit-id splitting (including ids that cannot
+  be addressed), ticker extraction from a `display_names` entry (including
+  filers that have no ticker, where the CIK parenthetical must not be mistaken
+  for one), and the projection itself.
+
+### Changed
+- `protocol_surface` now asserts tool **names**, not just the count. A count
+  catches a tool vanishing but not one being renamed, and the name is what
+  clients bind to.
+- README lists `sec_full_text_search` and `sec_insider_transactions`; the latter
+  shipped in 0.5.1 without being added to the table.
+
 ## [0.5.1] - 2026-09-18
 
 ### Added

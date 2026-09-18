@@ -336,6 +336,43 @@ fn live_smoke() {
         assets["data"].as_array().is_some_and(|a| !a.is_empty()),
         "instant frame returned no rows: {assets}"
     );
+
+    // Full-text search. This is the one endpoint sec-mcp calls that SEC does not
+    // document — `efts.sec.gov`, the API behind the EDGAR search UI — so it has
+    // no stability guarantee and this assertion is the only thing that would
+    // notice it drifting. Deliberately scoped to one company so the result set
+    // is small and the assertions can be specific.
+    let hits = server.call_tool(
+        "sec_full_text_search",
+        json!({ "query": "\"iPhone\"", "ticker": "AAPL", "forms": "10-K", "limit": 3 }),
+    );
+    let results = hits["results"].as_array().expect("results array");
+    assert!(
+        !results.is_empty(),
+        "full-text search returned nothing for a phrase Apple certainly filed: {hits}"
+    );
+
+    let first = &results[0];
+    assert_eq!(
+        first["cik"].as_str(),
+        Some("0000320193"),
+        "the ticker filter should have scoped this to Apple: {hits}"
+    );
+    assert_eq!(first["form"].as_str(), Some("10-K"), "form filter: {hits}");
+
+    // The document URL is the point of the tool — a hit whose URL cannot be
+    // built is reported as `url_unavailable`, which means the id shape changed.
+    let url = first["url"]
+        .as_str()
+        .unwrap_or_else(|| panic!("hit carried no URL (shape change?): {hits}"));
+    assert!(
+        url.starts_with("https://www.sec.gov/Archives/edgar/data/320193/"),
+        "URL should address Apple's archive without zero-padding: {url}"
+    );
+    assert!(
+        first["accession"].as_str().is_some_and(|a| a.contains('-')),
+        "accession should keep its dashes: {hits}"
+    );
 }
 
 /// The MCP `2026-07-28` surface. Offline: every assertion below is answered by
@@ -407,7 +444,28 @@ fn protocol_surface() {
     assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
 
     let tools = result["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 9, "expected 9 tools: {listed}");
+    assert_eq!(tools.len(), 10, "expected 10 tools: {listed}");
+
+    // Named rather than merely counted: a count catches a tool vanishing but not
+    // one being renamed, and the name is the part clients bind to.
+    let names: Vec<&str> = tools
+        .iter()
+        .filter_map(|t| t["name"].as_str())
+        .collect();
+    for expected in [
+        "sec_company_facts",
+        "sec_company_info",
+        "sec_configure",
+        "sec_financial_concept",
+        "sec_full_text_search",
+        "sec_insider_transactions",
+        "sec_list_tickers",
+        "sec_lookup_cik",
+        "sec_recent_filings",
+        "sec_xbrl_frames",
+    ] {
+        assert!(names.contains(&expected), "{expected} missing from {names:?}");
+    }
 
     // The server sandbox starts unconfigured, so `sec_configure` must carry the
     // first-run wording rather than the steady-state text.
