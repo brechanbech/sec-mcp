@@ -5,11 +5,48 @@ reasoning survives rather than being re-derived each time. Nothing here is
 committed work; the ordering reflects value-per-effort, not priority.
 
 Current scope is the four documented `data.sec.gov` APIs — submissions, XBRL
-company-concept, company-facts, and frames — surfaced as eight tools. Verified
+company-concept, company-facts, and frames — surfaced as nine tools. Verified
 against SEC's [EDGAR APIs page](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 on 29 July 2026: all four are current, none deprecated, no auth required, 10
 req/sec, `User-Agent` mandatory. EDGAR Next (mandatory filer enrolment since
 24 March 2025) governs *submitting* filings and does not affect data consumers.
+
+**Re-verified 18 September 2026** — unchanged. The APIs page still documents the
+same four endpoints and still carries its June 2024 update / April 2025 review
+dates: no new consumer APIs, no deprecations, no change to the rate limit or the
+`User-Agent` requirement. 2026's EDGAR releases are all filer-side and do not
+touch the consumption path: [26.0.1](https://www.sec.gov/newsroom/whats-new/edgar-release-2601)
+documents a 404 for the Enrollment API removed in 25.4,
+[26.1](https://www.sec.gov/newsroom/whats-new/edgar-release-261) adds degraded
+statuses to the Operational Status API, and
+[26.3](https://www.sec.gov/submit-filings/edgar-news-announcements/edgar-release-263)
+(14 September 2026) adds Form 1 and ANE Exception Notice interfaces plus XBRL
+taxonomy versions. Same category as EDGAR Next.
+
+## Watching: the EDGAR Beta API ecosystem preview
+
+Not a capability to build — a change that could arrive under us, which is why it
+is recorded here rather than left to be rediscovered.
+
+SEC says ["substantial updates to the SEC's API ecosystem"](https://www.sec.gov/newsroom/whats-new/edgar-beta-will-remain-open)
+will be previewed in EDGAR Beta, "including but not limited to, changes to API
+technical specifications, the EDGAR API Development Toolkit, and **API usage
+requirements or policies**."
+
+That last clause is the one that matters here. Usage requirements are where a
+rate limit, a `User-Agent` rule, or an authentication step would live, and all
+three are load-bearing for this crate — the 10 req/sec limit shapes
+`sec_insider_transactions`' sequential fetches, and the mandatory `User-Agent`
+is why `sec_configure` exists at all.
+
+**The scope is genuinely unstated.** The announcement does not say whether this
+covers only the filer submission APIs or the `data.sec.gov` consumer APIs too,
+and both plausibly sit under "API ecosystem". Do not assume either way; the
+answer is worth an email to FilerTechUnit@sec.gov if it starts to matter.
+
+**There is warning if anyone looks.** Major releases reach EDGAR Beta about two
+weeks before live EDGAR. 26.3 shipped 14 September 2026, so the next quarterly
+is roughly December — **revisit then** (checked 18 September 2026).
 
 ## 1. Full-text search
 
