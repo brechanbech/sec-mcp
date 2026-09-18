@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
-## [Unreleased]
+## [0.5.2] - 2026-09-18
 
 ### Added
 - **`sec_full_text_search` — search the body text of every filing since 2001,
