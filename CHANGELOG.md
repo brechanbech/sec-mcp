@@ -53,6 +53,25 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 - `docs/roadmap.md`, recording candidate EDGAR capabilities that are currently
   out of scope.
 
+### Security
+- **rustls 0.23.40 → 0.23.45** (lockfile only), clearing RUSTSEC-2026-0285: TLS
+  1.3 handshake messages were accepted across encryption-level boundaries. Note
+  that `cargo update -p rustls` resolves only as far as 0.23.43, which is still
+  affected — the bump needs `--precise`. The weekly `audit` workflow that would
+  normally have caught this has not fired since Monday 7 September; the advisory
+  was found by hand.
+
+### Changed
+- **rmcp 3.0.0 → 3.4.0.** This corrects protocol negotiation: a client naming
+  `2026-07-28` over `initialize` is now answered with `2025-11-25` rather than
+  having `2026-07-28` echoed back. That is the right answer — `2026-07-28`
+  replaced the handshake with per-request `_meta`, so there is no handshake in
+  which to agree on it, and the server must fall back to its newest revision
+  that still has one. `protocol_surface` asserted the old behaviour and has been
+  updated; the stateless path (`server/discover` with `_meta`) is unaffected, so
+  2026-07-28 support itself is intact.
+- `ServerInfo` → `ServerConfig`, the former now being a deprecated alias in rmcp.
+
 ## [0.5.0] - 2026-07-29
 
 ### Added

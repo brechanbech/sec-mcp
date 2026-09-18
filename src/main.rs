@@ -17,7 +17,7 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
     CacheScope, CallToolResult, ContentBlock, Implementation, ListToolsResult,
-    PaginatedRequestParams, ResultType, ServerCapabilities, ServerInfo,
+    PaginatedRequestParams, ResultType, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::transport::stdio;
@@ -1317,11 +1317,11 @@ impl SecMcp {
 
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for SecMcp {
-    fn get_info(&self) -> ServerInfo {
+    fn get_info(&self) -> ServerConfig {
         // Lean on Default for protocol_version (rmcp negotiates up to 2026-07-28
         // from it). ServerInfo is #[non_exhaustive], so mutate a Default rather
         // than use a struct literal.
-        let mut info = ServerInfo::default();
+        let mut info = ServerConfig::default();
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
         // NOT Default: `Implementation::from_build_env` expands `env!` inside
         // rmcp, so it names the SDK rather than this server. Clients see this in

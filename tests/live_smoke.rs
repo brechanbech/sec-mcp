@@ -344,9 +344,15 @@ fn live_smoke() {
 #[test]
 fn protocol_surface() {
     // ── Negotiation ──────────────────────────────────────────────────────────
-    // The server offers 2026-07-28 and still meets older clients where they are.
+    // A client naming 2026-07-28 over `initialize` is contradicting itself: that
+    // revision replaced the handshake with the per-request `_meta` exercised
+    // below, so there is no handshake in which to agree on it. The correct
+    // answer is the server's newest revision that *does* have one. rmcp 3.0
+    // echoed 2026-07-28 back instead, and this test asserted that; rmcp 3.4
+    // fixed the negotiation, so the expectation moves with it rather than the
+    // server having regressed.
     let mut server = Server::start();
-    assert_eq!(server.handshake("2026-07-28"), "2026-07-28");
+    assert_eq!(server.handshake("2026-07-28"), "2025-11-25");
     drop(server);
 
     let mut server = Server::start();
