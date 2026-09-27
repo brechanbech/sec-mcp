@@ -124,3 +124,28 @@ Ownership-verification token for the [MCP registry](https://registry.modelcontex
 (read from this crate's rendered README on crates.io):
 
 > Registry ownership token: `mcp-name: io.github.brechanbech/sec-mcp`
+
+### Releasing
+
+A version is immutable once published — crates.io yanks, it does not delete, and a number is
+never reused — so the order matters:
+
+1. `cargo test` and `cargo clippy --all-targets` clean.
+2. Bump `version` in **`Cargo.toml`**.
+3. Bump `version` in **`server.json`** — *both* fields, the top-level one and the one under
+   `packages[]`. Nothing enforces this: no script, no CI, no test reads the file, and it is the
+   step that goes missing. This manifest stayed correct, but the registry *entry* did not: 0.5.0,
+   0.5.1 and 0.5.2 all shipped to crates.io while the registry still advertised 0.4.4, because
+   step 6 was never run.
+4. Commit and push; let CI go green before publishing rather than after.
+5. `cargo publish --dry-run`, which compiles *from the packaged copy* and so catches a crate
+   depending on a file it does not ship. Then `cargo publish`.
+6. Publish to the MCP registry, **after** crates.io and not before — the registry verifies the
+   namespace by reading `mcp-name` from this crate's *rendered README on crates.io*, and
+   `server.json` names a cargo version that must already exist there:
+
+   ```sh
+   mcp-publisher validate      # checks server.json against the live registry
+   mcp-publisher login github  # interactive, for the io.github.brechanbech/* namespace
+   mcp-publisher publish
+   ```
