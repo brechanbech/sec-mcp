@@ -52,6 +52,8 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   RUSTSEC-2026-0383 (webpki-root-certs 1.0.10). The last two concern
   distrusted emSign intermediates being accepted during certificate
   verification.
+- Bumped tokio 1.52.3 → 1.54.1 in `Cargo.lock` to clear RUSTSEC-2026-0386
+  (`AsyncFd::new` violates I/O safety). sec-mcp does not use `AsyncFd`.
 
 ## [0.5.2] - 2026-09-18
 
