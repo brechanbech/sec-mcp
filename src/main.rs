@@ -387,10 +387,18 @@ struct FullTextSearchParams {
     /// Words or phrase to find in filing text. Wrap in double quotes for an
     /// exact phrase: "climate transition plan". Unquoted terms match separately.
     query: String,
-    /// Optional filter: '10-K', '8-K', or several comma-separated ('10-K,10-Q')
+    /// Optional filter: '10-K', '8-K', or several comma-separated ('10-K,10-Q').
+    /// Amendments are excluded unless requested: '10-K' returns original 10-Ks
+    /// only, '10-K/A' returns amendments only, '10-K,10-K/A' returns both.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
     forms: Option<String>,
+    /// Also return amendments ('10-K/A') of the requested forms (default
+    /// false). Amendments are often partial (only Part III, or one exhibit) or
+    /// restatements that supersede the original's figures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool", extend("default" = false))]
+    include_amendments: Option<bool>,
     /// Optional: restrict to one company by ticker
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
@@ -504,7 +512,9 @@ struct XbrlFramesParams {
 //
 // Forms 3 (initial ownership), 4 (changes) and 5 (annual catch-up) share one
 // `ownershipDocument` schema. Form 3 carries *holdings*; 4 and 5 carry
-// *transactions* — so both are emitted, and a Form 3 is never an empty result.
+// *transactions* — so both are emitted, and a Form 3 is never a silently empty
+// result: an insider who owns nothing yet says so with `noSecuritiesOwned`, and
+// that is surfaced rather than left looking like a parse failure.
 
 /// Expansion of an SEC transaction code. Returns `None` for codes not in the
 /// common set, so the caller can fall back to the raw letter.
@@ -661,7 +671,7 @@ fn parse_ownership_document(xml: &str) -> Result<Value> {
         }
     }
 
-    Ok(json!({
+    let mut out = json!({
         "form": field(root, "documentType"),
         "period_of_report": field(root, "periodOfReport"),
         "issuer": {
@@ -672,7 +682,14 @@ fn parse_ownership_document(xml: &str) -> Result<Value> {
         "insiders": insiders,
         "transactions": transactions,
         "holdings": holdings,
-    }))
+    });
+    // A newly appointed officer files a Form 3 with empty tables and this flag
+    // set. Without it, empty `holdings` reads the same as a document we failed
+    // to parse. Omitted when false, like empty 8-K `items`.
+    if flag(root, "noSecuritiesOwned") {
+        out["no_securities_owned"] = json!(true);
+    }
+    Ok(out)
 }
 
 /// Split a full-text-search hit `_id` into its accession and document halves.
@@ -759,7 +776,65 @@ fn slim_search_hit(hit: &Value) -> Value {
     if let Some(items) = source["items"].as_array().filter(|i| !i.is_empty()) {
         out.insert("items".into(), json!(items));
     }
+    // A trailing `/A` in `form` is easy to read past; an amendment is often a
+    // partial document or a restatement, so it is flagged outright.
+    if source["form"].as_str().is_some_and(is_amendment) {
+        out.insert("amendment".into(), json!(true));
+    }
     Value::Object(out)
+}
+
+/// Whether a form type is an amendment: `10-K/A`, `8-K/A`, `S-1/A`.
+fn is_amendment(form: &str) -> bool {
+    form.ends_with("/A")
+}
+
+/// The hits a page yields, after amendment filtering.
+#[derive(Debug, PartialEq)]
+struct HitSelection<'a> {
+    kept: Vec<&'a Value>,
+    /// Raw hits walked to fill `kept`, so the next page starts after them.
+    consumed: usize,
+    /// Amendments skipped on the way.
+    amendments_excluded: usize,
+}
+
+/// Pick up to `limit` hits from one raw EFTS page.
+///
+/// EFTS filters `forms` on `root_forms`, so `forms=10-K` also matches every
+/// `10-K/A` — confirmed from the query EFTS echoes back, on 23 October 2026. A
+/// hit is dropped only when it is an amendment *and* its own form was not
+/// requested, so asking for `10-K/A` still works and a non-amendment variant
+/// that shares a root form is never miscounted as one. With no `forms` filter
+/// nothing is dropped: there is no requested form to be strict about.
+fn select_hits<'a>(
+    hits: &'a [Value],
+    forms: Option<&str>,
+    include_amendments: bool,
+    limit: usize,
+) -> HitSelection<'a> {
+    let requested: Vec<String> = forms
+        .unwrap_or_default()
+        .split(',')
+        .map(|f| f.trim().to_ascii_uppercase())
+        .filter(|f| !f.is_empty())
+        .collect();
+    let strict = !include_amendments && !requested.is_empty();
+
+    let mut selection = HitSelection { kept: Vec::new(), consumed: 0, amendments_excluded: 0 };
+    for hit in hits {
+        if selection.kept.len() >= limit {
+            break;
+        }
+        selection.consumed += 1;
+        let form = hit["_source"]["form"].as_str().unwrap_or_default().to_ascii_uppercase();
+        if strict && is_amendment(&form) && !requested.contains(&form) {
+            selection.amendments_excluded += 1;
+        } else {
+            selection.kept.push(hit);
+        }
+    }
+    selection
 }
 
 /// Turn a submissions `primaryDocument` into the URL of the *raw* XML.
@@ -933,8 +1008,13 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 )
                 .await?;
 
+            let forms = args["forms"].as_str().map(str::trim).filter(|f| !f.is_empty());
+            let include_amendments = args["include_amendments"].as_bool().unwrap_or(false);
+            let filtering = forms.is_some() && !include_amendments;
+
             let hits = body["hits"]["hits"].as_array().cloned().unwrap_or_default();
-            let results: Vec<Value> = hits.iter().take(limit as usize).map(slim_search_hit).collect();
+            let selection = select_hits(&hits, forms, include_amendments, limit as usize);
+            let results: Vec<Value> = selection.kept.iter().map(|h| slim_search_hit(h)).collect();
 
             let total = body["hits"]["total"]["value"].as_u64().unwrap_or(0);
             let relation = body["hits"]["total"]["relation"].as_str().unwrap_or("eq");
@@ -944,21 +1024,44 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             out.insert("total".into(), json!(total));
             // Elasticsearch saturates the count at 10000 and flags it with
             // `relation: "gte"`. Reporting 10000 as exact would be a lie, and
-            // this is the kind of quiet distortion a caller builds on.
-            if relation != "eq" {
-                out.insert("total_is_lower_bound".into(), json!(true));
+            // this is the kind of quiet distortion a caller builds on. The same
+            // goes for amendment filtering: EDGAR's count still includes the
+            // amendments dropped here, so an exact count becomes a ceiling, and
+            // a saturated one is no longer a bound in either direction.
+            match (relation == "eq", filtering) {
+                (true, false) => {}
+                (true, true) => {
+                    out.insert("total_is_upper_bound".into(), json!(true));
+                }
+                (false, false) => {
+                    out.insert("total_is_lower_bound".into(), json!(true));
+                }
+                (false, true) => {
+                    out.insert("total_is_approximate".into(), json!(true));
+                }
             }
             out.insert("returned".into(), json!(results.len()));
             out.insert("offset".into(), json!(offset));
+            if filtering {
+                out.insert("amendments_excluded".into(), json!(selection.amendments_excluded));
+            }
+            // With filtering, a page can walk past more hits than it returns,
+            // so `offset + returned` would revisit some; `next_offset` is the
+            // only correct place to resume.
+            let next_offset = offset + selection.consumed as u64;
+            if selection.consumed > 0 && next_offset < total {
+                out.insert("next_offset".into(), json!(next_offset));
+            }
             out.insert("results".into(), json!(results));
             if results.is_empty() {
-                out.insert(
-                    "note".into(),
-                    json!(
-                        "No filings matched. Full-text search covers filing bodies from 2001 \
-                         onward; an exact phrase needs double quotes inside the query string."
-                    ),
-                );
+                let note = if selection.amendments_excluded > 0 {
+                    "Every hit on this page was an amendment, which is excluded by default. \
+                     Pass include_amendments: true to see them, or page on with next_offset."
+                } else {
+                    "No filings matched. Full-text search covers filing bodies from 2001 \
+                     onward; an exact phrase needs double quotes inside the query string."
+                };
+                out.insert("note".into(), json!(note));
             }
             Ok(Value::Object(out))
         }
@@ -1480,7 +1583,7 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Optionally filter by form, ticker and date range. Each hit comes back with a direct URL to the matching document. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`."
+        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Optionally filter by form, ticker and date range; a form filter excludes amendments (e.g. '10-K/A') unless include_amendments is set, and any amendment returned is marked 'amendment': true. Each hit comes back with a direct URL to the matching document. To page, pass `next_offset` back as `offset` — filtering means a page can return fewer than `limit` hits. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`, and counts excluded amendments, flagged by `total_is_upper_bound` (or `total_is_approximate` when both apply)."
     )]
     async fn sec_full_text_search(
         &self,
@@ -1530,7 +1633,7 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'."
+        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true."
     )]
     async fn sec_insider_transactions(
         &self,
@@ -1780,5 +1883,110 @@ mod tests {
         let slim = slim_search_hit(&hit);
         assert_eq!(slim["url_unavailable"], json!(true));
         assert!(slim.get("url").is_none());
+    }
+
+    /// A raw page in the order EFTS ranked Apple's "iPhone" 10-K hits on
+    /// 23 October 2026: the FY2009 restatement's two documents first.
+    fn ranked_page() -> Vec<Value> {
+        ["10-K/A", "10-K/A", "10-K", "10-K", "10-K"]
+            .iter()
+            .map(|form| json!({ "_source": { "form": form } }))
+            .collect()
+    }
+
+    fn forms_of<'a>(selection: &HitSelection<'a>) -> Vec<&'a str> {
+        selection
+            .kept
+            .iter()
+            .map(|h| h["_source"]["form"].as_str().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn a_base_form_filter_drops_its_amendments_and_walks_past_them() {
+        let page = ranked_page();
+        let selection = select_hits(&page, Some("10-K"), false, 2);
+        assert_eq!(forms_of(&selection), ["10-K", "10-K"]);
+        assert_eq!(selection.amendments_excluded, 2);
+        // Two kept, but four walked: the next page must start after all four.
+        assert_eq!(selection.consumed, 4);
+    }
+
+    #[test]
+    fn include_amendments_keeps_edgar_order() {
+        let page = ranked_page();
+        let selection = select_hits(&page, Some("10-K"), true, 3);
+        assert_eq!(forms_of(&selection), ["10-K/A", "10-K/A", "10-K"]);
+        assert_eq!(selection.amendments_excluded, 0);
+        assert_eq!(selection.consumed, 3);
+    }
+
+    #[test]
+    fn asking_for_the_amendment_itself_still_returns_it() {
+        let page = ranked_page();
+        for forms in ["10-K/A", "10-k/a", "10-K, 10-K/A"] {
+            let selection = select_hits(&page, Some(forms), false, 10);
+            assert_eq!(selection.amendments_excluded, 0, "{forms:?}");
+        }
+    }
+
+    #[test]
+    fn with_no_form_filter_nothing_is_dropped() {
+        let page = ranked_page();
+        let selection = select_hits(&page, None, false, 10);
+        assert_eq!(selection.kept.len(), 5);
+        assert_eq!(selection.amendments_excluded, 0);
+    }
+
+    #[test]
+    fn an_amendment_hit_is_flagged() {
+        let mut hit = sample_hit();
+        assert!(slim_search_hit(&hit).get("amendment").is_none());
+        hit["_source"]["form"] = json!("10-K/A");
+        assert_eq!(slim_search_hit(&hit)["amendment"], json!(true));
+    }
+
+    /// The NVDA Form 3 that tripped the live smoke test (accession
+    /// 0002152188-26-000003, filed 3 September 2026), trimmed to the elements
+    /// that matter: a flagged-empty filing whose tables are present but empty.
+    fn form3_no_securities() -> &'static str {
+        r#"<?xml version="1.0"?>
+<ownershipDocument>
+    <schemaVersion>X0607</schemaVersion>
+    <documentType>3</documentType>
+    <periodOfReport>2026-08-24</periodOfReport>
+    <noSecuritiesOwned>1</noSecuritiesOwned>
+    <issuer>
+        <issuerCik>0001045810</issuerCik>
+        <issuerName>NVIDIA CORP</issuerName>
+        <issuerTradingSymbol>NVDA</issuerTradingSymbol>
+    </issuer>
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0002152188</rptOwnerCik>
+            <rptOwnerName>Parker Nicholas P.</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerRelationship>
+            <isOfficer>1</isOfficer>
+            <officerTitle>EVP, Worldwide Field Ops</officerTitle>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+    <nonDerivativeTable></nonDerivativeTable>
+    <derivativeTable></derivativeTable>
+</ownershipDocument>"#
+    }
+
+    #[test]
+    fn a_form3_owning_nothing_says_so() {
+        let doc = parse_ownership_document(form3_no_securities()).unwrap();
+        assert_eq!(doc["holdings"], json!([]));
+        assert_eq!(doc["no_securities_owned"], json!(true));
+    }
+
+    #[test]
+    fn the_no_securities_flag_is_omitted_when_unset() {
+        let xml = form3_no_securities().replace("<noSecuritiesOwned>1</noSecuritiesOwned>", "");
+        let doc = parse_ownership_document(&xml).unwrap();
+        assert!(doc.get("no_securities_owned").is_none());
     }
 }

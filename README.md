@@ -72,12 +72,42 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_lookup_cik` | Resolve a ticker symbol to its SEC CIK number |
 | `sec_company_info` | SIC code, industry, state of incorporation, fiscal year end, addresses |
 | `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs — pages into older history automatically when a form-type filter needs it |
-| `sec_full_text_search` | Search the **body text** of filings since 2001, exhibits included — the only tool here that finds companies by what they *said*, rather than needing the company up front. Filter by form, ticker and date; every hit carries a direct document URL |
+| `sec_full_text_search` | Search the **body text** of filings since 2001, exhibits included — the only tool here that finds companies by what they *said*, rather than needing the company up front. Filter by form, ticker and date (amendments [excluded unless asked for](#amendments-10-ka-and-friends)); every hit carries a direct document URL |
 | `sec_insider_transactions` | Forms 3, 4 and 5 — who bought or sold, when, how many shares and at what price, with transaction codes in plain language and footnotes resolved |
 | `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) |
 | `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info |
 | `sec_company_facts` | Discover all XBRL concepts (metrics) a company reports |
 | `sec_xbrl_frames` | Cross-company comparison of a financial metric for a given period |
+
+## Amendments (`10-K/A` and friends)
+
+A form ending in `/A` amends one filed earlier. A `10-K/A` is often **not** a
+complete annual report. Rule 12b-15 requires only the full text of each item
+being changed, so the most common amendment is Part III alone (directors, pay,
+ownership), filed when the proxy statement misses its 120-day window. Others add
+or fix exhibits. The rest are restatements that replace the original's figures.
+Apple's January 2010 `10-K/A`, for example, refiled fiscal 2009 under new
+revenue-recognition rules.
+
+sec-mcp therefore **excludes amendments unless you ask for them**:
+
+- `sec_financial_concept`'s `annual`/`quarterly` period filters match base forms
+  only. The amended period is already covered by the original filing, and
+  admitting both would report two facts for one period.
+- `sec_full_text_search` with a form filter drops amendments. EDGAR itself does
+  not: it filters on a filing's *root* form, so `forms=10-K` also returns
+  `10-K/A`. To get amendments, request the form directly (`10-K/A`), list both
+  (`10-K,10-K/A`), or pass `include_amendments: true`. Any amendment returned is
+  marked `amendment: true`.
+
+Because that search filtering happens after EDGAR's, two parts of the response
+behave differently from a plain search:
+
+- **`total`** is still EDGAR's count, which includes the dropped amendments. It
+  is flagged `total_is_upper_bound`, or `total_is_approximate` when it has also
+  saturated at 10000. Each page reports `amendments_excluded`.
+- **Paging** must use `next_offset`. A page can return fewer than `limit` hits
+  because amendments were skipped, so `offset + returned` would revisit them.
 
 ## Common XBRL concepts for `sec_financial_concept`
 

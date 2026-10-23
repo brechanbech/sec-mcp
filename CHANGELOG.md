@@ -6,6 +6,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
+## [Unreleased]
+
+### Fixed
+- **A Form 3 from an insider who owns nothing no longer looks like a parse
+  failure.** A newly appointed officer files a Form 3 with empty holdings tables
+  and `<noSecuritiesOwned>1</noSecuritiesOwned>`; `sec_insider_transactions`
+  ignored the flag, so the result was indistinguishable from a document it
+  failed to read. It now comes back as `no_securities_owned: true`. Found by the
+  live smoke test on an NVDA Form 3 filed 3 September 2026.
+- **`sec_full_text_search` no longer returns amendments for a base-form
+  filter.** EDGAR matches `forms` against each hit's root form, so `forms:
+  "10-K"` also returned `10-K/A`s — often partial documents (only Part III, or
+  one exhibit) or restatements, easily mistaken for the annual report itself.
+  Amendments are now excluded unless asked for, matching the period filters
+  elsewhere in sec-mcp: request `10-K/A` directly, list both forms, or pass the
+  new `include_amendments: true`. Any amendment returned carries
+  `amendment: true`.
+
+  The filtering happens after EDGAR's, so EDGAR's `total` still counts the
+  dropped amendments. It is flagged `total_is_upper_bound`, or
+  `total_is_approximate` when the count has also saturated at 10000, and each
+  page reports `amendments_excluded`. A page can now return fewer than `limit`
+  hits, so the response carries `next_offset`, which is the only correct place
+  to resume — `offset + returned` would revisit skipped hits.
+
+### Security
+- Bumped the TLS stack in `Cargo.lock` to clear RUSTSEC-2026-0346, -0347,
+  -0348, -0349 (rustls 0.23.46), RUSTSEC-2026-0382 (rustls-webpki 0.103.16) and
+  RUSTSEC-2026-0383 (webpki-root-certs 1.0.10). The last two concern
+  distrusted emSign intermediates being accepted during certificate
+  verification.
+
 ## [0.5.2] - 2026-09-18
 
 ### Added

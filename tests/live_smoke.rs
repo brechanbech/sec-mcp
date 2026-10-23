@@ -290,15 +290,17 @@ fn live_smoke() {
 
     // Form 3 reports holdings, not transactions. An empty `transactions` array
     // must not mean an empty result — the same silent-empty failure fixed in
-    // the period filter.
+    // the period filter. A new officer who owns nothing yet legitimately files
+    // empty tables, but then the document must say so via the flag.
     let form3 = server.call_tool(
         "sec_insider_transactions",
         json!({ "ticker": "NVDA", "form_type": "3", "limit": 1 }),
     );
     if let Some(f) = form3["filings"].as_array().and_then(|a| a.first()) {
         assert!(
-            f["holdings"].as_array().is_some_and(|h| !h.is_empty()),
-            "a Form 3 must report holdings rather than nothing: {f}"
+            f["holdings"].as_array().is_some_and(|h| !h.is_empty())
+                || f["no_securities_owned"] == json!(true),
+            "a Form 3 must report holdings or say none are owned, not nothing: {f}"
         );
     }
 
@@ -358,7 +360,31 @@ fn live_smoke() {
         Some("0000320193"),
         "the ticker filter should have scoped this to Apple: {hits}"
     );
-    assert_eq!(first["form"].as_str(), Some("10-K"), "form filter: {hits}");
+    // EFTS matches `forms` against `root_forms`, so it returns `10-K/A` for
+    // `10-K` — first-ranked here on 23 October 2026. The tool drops those by
+    // default; a leaked amendment means that filtering broke.
+    assert!(
+        results.iter().all(|r| r["form"].as_str() == Some("10-K")),
+        "form filter let a non-10-K through: {hits}"
+    );
+    assert!(
+        hits["next_offset"].as_u64().is_some(),
+        "23 matches and limit 3 must leave a next page: {hits}"
+    );
+
+    // And back in on request. Apple's January 2010 10-K/A (the FY2009
+    // restatement) is historical, so it will always be in this result set.
+    let with_amendments = server.call_tool(
+        "sec_full_text_search",
+        json!({ "query": "\"iPhone\"", "ticker": "AAPL", "forms": "10-K",
+                "include_amendments": true, "limit": 100 }),
+    );
+    assert!(
+        with_amendments["results"].as_array().is_some_and(|r| r
+            .iter()
+            .any(|h| h["form"] == "10-K/A" && h["amendment"] == json!(true))),
+        "include_amendments should return the flagged FY2009 10-K/A: {with_amendments}"
+    );
 
     // The document URL is the point of the tool — a hit whose URL cannot be
     // built is reported as `url_unavailable`, which means the id shape changed.

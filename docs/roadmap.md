@@ -5,7 +5,9 @@ reasoning survives rather than being re-derived each time. Nothing here is
 committed work; the ordering reflects value-per-effort, not priority.
 
 Current scope is the four documented `data.sec.gov` APIs — submissions, XBRL
-company-concept, company-facts, and frames — surfaced as nine tools. Verified
+company-concept, company-facts, and frames — plus the undocumented full-text
+search on `efts.sec.gov` and ownership XML from the Archives, surfaced as ten
+tools. Verified
 against SEC's [EDGAR APIs page](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 on 29 July 2026: all four are current, none deprecated, no auth required, 10
 req/sec, `User-Agent` mandatory. EDGAR Next (mandatory filer enrolment since
@@ -22,6 +24,17 @@ statuses to the Operational Status API, and
 [26.3](https://www.sec.gov/submit-filings/edgar-news-announcements/edgar-release-263)
 (14 September 2026) adds Form 1 and ANE Exception Notice interfaces plus XBRL
 taxonomy versions. Same category as EDGAR Next.
+
+**Re-verified 23 October 2026**: still unchanged. Same four endpoints, same
+June 2024 / April 2025 dates on the APIs page. The only announcement since 26.3
+is the [7 October preview of Release 26.4](https://www.sec.gov/submit-filings/edgar-news-announcements/preview-planned-technical-specifications-december-2026-edgar-release-264),
+scheduled for **7 December 2026**. It adds one filer-side XML form (the SBS
+Dispute Notice under Exchange Act Rule 15fi-3(c)) and says nothing about
+`data.sec.gov`, full-text search, the Archives, ownership schemas, rate limits,
+`User-Agent` or usage policy. The live smoke test was run end to end the same
+day. It caught two things that were ours, not EDGAR drift: the ignored Form 3
+`noSecuritiesOwned` flag, and full-text search's form filter admitting
+amendments (see item 1).
 
 ## Watching: the EDGAR Beta API ecosystem preview
 
@@ -45,8 +58,10 @@ and both plausibly sit under "API ecosystem". Do not assume either way; the
 answer is worth an email to FilerTechUnit@sec.gov if it starts to matter.
 
 **There is warning if anyone looks.** Major releases reach EDGAR Beta about two
-weeks before live EDGAR. 26.3 shipped 14 September 2026, so the next quarterly
-is roughly December — **revisit then** (checked 18 September 2026).
+weeks before live EDGAR. 26.4 is scheduled for 7 December 2026, and its preview
+gives no Beta date, so **revisit in late November 2026**. Its published scope is
+filer-side only, but the Beta preview is where a usage-policy change would
+first appear (checked 23 October 2026).
 
 ## 1. Full-text search — **done**
 
@@ -62,6 +77,16 @@ exact. A hit `_id` is `accession:document`, so the Archives URL is constructible
 — note it takes the CIK *without* zero-padding and the accession *without*
 dashes, the opposite of every `data.sec.gov` path. Two generated URLs were
 fetched and returned 200.
+
+**`forms` matches the root form, amendments included** (found 23 October
+2026). EFTS echoes the Elasticsearch query it ran, and the filter is
+`terms: { root_forms: [...] }`, so `forms=10-K` also returns every `10-K/A`.
+The `form_filter` aggregation is keyed on `root_forms` too, so EDGAR offers no
+count of amendments to subtract. The tool now drops unrequested amendments
+client-side, consistent with the period filters, and is honest about the cost:
+`total` is flagged as an upper bound, and paging resumes from `next_offset`,
+not `offset + returned`. The September smoke test passed only because a base
+10-K happened to rank first.
 
 `https://efts.sec.gov/LATEST/search-index?q=…&forms=…&dateRange=…`
 
@@ -182,6 +207,12 @@ cache are the right fit.
   base forms only, so a `10-K/A` restatement is not returned. Deliberate — the
   amended period is already present via the original filing, and admitting both
   would emit two facts for one period. Revisit if restatements matter.
+  `sec_full_text_search` follows the same default but, unlike the period
+  filters, can be told otherwise (`include_amendments`).
+- **A filtered full-text page can come back short.** Dropping amendments
+  happens after EDGAR's paging, so a page may return fewer than `limit` hits
+  rather than spending extra requests to top it up. Callers page with
+  `next_offset`.
 - **`sec_list_tickers` caps at 50 rows** and `sec_financial_concept` returns the
   last 20 facts. Fine interactively; a caller wanting completeness has no way to
   page past it.
