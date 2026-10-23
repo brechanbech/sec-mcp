@@ -255,6 +255,38 @@ fn live_smoke() {
         "an empty period filter must report the forms actually present: {fpi_annual}"
     );
 
+    // Paging back through a concept: page two must reach further into the past
+    // than page one. "Past" means period `end`, which EDGAR sorts on; `filed`
+    // is not monotonic, since each 10-K re-reports earlier years as
+    // comparatives. Apple has filed NetIncomeLoss for well over a decade.
+    let concept_page = |offset: u64| {
+        json!({ "ticker": "AAPL", "concept": "NetIncomeLoss", "period": "annual",
+                "limit": 5, "offset": offset })
+    };
+    let newest = server.call_tool("sec_financial_concept", concept_page(0));
+    assert_eq!(newest["next_offset"], json!(5), "page one must point at page two: {newest}");
+    let older = server.call_tool("sec_financial_concept", concept_page(5));
+    let period_end = |page: &Value, idx: usize| page["data"][idx]["end"].as_str().map(str::to_owned);
+    assert_eq!(older["returned"], json!(5), "page two came back short: {older}");
+    assert!(
+        period_end(&older, 4) <= period_end(&newest, 0),
+        "page two should reach back before page one: {older} vs {newest}"
+    );
+
+    // Paging through tickers: the second page continues where the first ended.
+    let tickers_page = |offset: u64| json!({ "query": "bank", "limit": 5, "offset": offset });
+    let first_page = server.call_tool("sec_list_tickers", tickers_page(0));
+    assert!(
+        first_page["matched"].as_u64().is_some_and(|m| m > 5),
+        "'bank' should match more than one page of tickers: {first_page}"
+    );
+    assert_eq!(first_page["next_offset"], json!(5), "{first_page}");
+    let second_page = server.call_tool("sec_list_tickers", tickers_page(5));
+    assert_ne!(
+        first_page["data"][0]["ticker"], second_page["data"][0]["ticker"],
+        "page two repeated page one: {second_page}"
+    );
+
     // Insider transactions: the Form 4 XML is fetched and parsed, not just
     // linked. Guards the URL rule (submissions points at the XSL-rendered path;
     // the raw document is that path with the `xsl…/` segment stripped) and the

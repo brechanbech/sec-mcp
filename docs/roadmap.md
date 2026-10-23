@@ -213,6 +213,7 @@ cache are the right fit.
   happens after EDGAR's paging, so a page may return fewer than `limit` hits
   rather than spending extra requests to top it up. Callers page with
   `next_offset`.
-- **`sec_list_tickers` caps at 50 rows** and `sec_financial_concept` returns the
-  last 20 facts. Fine interactively; a caller wanting completeness has no way to
-  page past it.
+- ~~**`sec_list_tickers` caps at 50 rows** and `sec_financial_concept` returns
+  the last 20 facts.~~ **Done** (23 October 2026): both page with `limit`,
+  `offset` and `next_offset`. `sec_financial_concept` pages back from the
+  latest period end, which is EDGAR's sort key; `filed` is not monotonic.

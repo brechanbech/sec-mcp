@@ -8,6 +8,21 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- **Paging for `sec_financial_concept` and `sec_list_tickers`.** Both had
+  fixed caps (the latest 20 facts, the first 50 tickers) and no way past them.
+  Each now takes `limit` and `offset` and reports `returned` and, while more
+  remain, `next_offset`, the same shape as `sec_full_text_search`. Defaults
+  are unchanged, so existing calls return what they did before.
+
+  `sec_financial_concept` pages **newest first**: offset 0 is the latest
+  periods, and each later page reaches further back. Within a page, facts stay
+  in chronological order. "Newest" means period end, which is how EDGAR sorts
+  the facts; it is not filing date, since every 10-K re-reports earlier years
+  as comparatives. `total_facts` gives the count after any period filter (max
+  `limit` 100). `sec_list_tickers` adds `matched`, the number of tickers that
+  fit the query, alongside the existing `total_tickers` (max `limit` 200).
+
 ### Fixed
 - **A Form 3 from an insider who owns nothing no longer looks like a parse
   failure.** A newly appointed officer files a Form 3 with empty holdings tables

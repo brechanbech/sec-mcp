@@ -74,8 +74,8 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs — pages into older history automatically when a form-type filter needs it |
 | `sec_full_text_search` | Search the **body text** of filings since 2001, exhibits included — the only tool here that finds companies by what they *said*, rather than needing the company up front. Filter by form, ticker and date (amendments [excluded unless asked for](#amendments-10-ka-and-friends)); every hit carries a direct document URL |
 | `sec_insider_transactions` | Forms 3, 4 and 5 — who bought or sold, when, how many shares and at what price, with transaction codes in plain language and footnotes resolved |
-| `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) |
-| `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info |
+| `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) — latest 20 facts by default, paging back into older history |
+| `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info — 50 per page, with paging |
 | `sec_company_facts` | Discover all XBRL concepts (metrics) a company reports |
 | `sec_xbrl_frames` | Cross-company comparison of a financial metric for a given period |
 

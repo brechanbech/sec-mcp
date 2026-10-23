@@ -440,6 +440,15 @@ struct FinancialConceptParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String", extend("enum" = ["annual", "quarterly"]))]
     period: Option<String>,
+    /// Number of facts to return (default 20, max 100), most recent first
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 20))]
+    limit: Option<u64>,
+    /// Number of most-recent facts to skip, for paging back into older history
+    /// (default 0). Pass the previous response's 'next_offset'.
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -454,6 +463,15 @@ struct ListTickersParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
     query: Option<String>,
+    /// Number of tickers to return (default 50, max 200)
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 50))]
+    limit: Option<u64>,
+    /// Number of matching tickers to skip, for paging (default 0). Pass the
+    /// previous response's 'next_offset'.
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -782,6 +800,19 @@ fn slim_search_hit(hit: &Value) -> Value {
         out.insert("amendment".into(), json!(true));
     }
     Value::Object(out)
+}
+
+/// The slice of a chronological list that a newest-first page covers.
+///
+/// `companyconcept` lists facts by period `end`, oldest first (not by `filed`:
+/// each 10-K re-reports earlier years as comparatives, verified 23 October
+/// 2026). A caller wants the latest periods, so `offset` counts back from the
+/// end: offset 0 is the newest `limit`
+/// facts, and each later page reaches further into the past. The returned
+/// range stays in chronological order. An offset past the start is empty.
+fn newest_first_window(len: usize, offset: usize, limit: usize) -> std::ops::Range<usize> {
+    let end = len.saturating_sub(offset);
+    end.saturating_sub(limit)..end
 }
 
 /// Whether a form type is an amendment: `10-K/A`, `8-K/A`, `S-1/A`.
@@ -1182,7 +1213,10 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 Vec::new()
             };
 
-            let tail: Vec<&Value> = filtered.iter().rev().take(20).rev().copied().collect();
+            let limit = args["limit"].as_u64().unwrap_or(20).clamp(1, 100) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+            let window = newest_first_window(filtered.len(), offset, limit);
+            let page = &filtered[window.clone()];
 
             let mut result = json!({
                 "company": entity,
@@ -1193,8 +1227,16 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 "label": label,
                 "description": description,
                 "unit": unit_name,
-                "data": tail
+                "total_facts": filtered.len(),
+                "returned": page.len(),
+                "offset": offset,
+                "data": page
             });
+            // Older facts sit *before* the window, so there is more exactly when
+            // it does not start at the beginning.
+            if window.start > 0 {
+                result["next_offset"] = json!(offset + page.len());
+            }
 
             if !unmatched_forms.is_empty() {
                 result["note"] = json!(format!(
@@ -1241,46 +1283,55 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let data = client.list_tickers().await?;
 
             let query = args["query"].as_str().map(|s| s.to_lowercase());
+            let limit = args["limit"].as_u64().unwrap_or(50).clamp(1, 200) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
             let rows = data["data"].as_array();
 
-            let results: Vec<Value> = match rows {
-                Some(rows) => rows
-                    .iter()
-                    .filter(|row| {
-                        let row = match row.as_array() {
-                            Some(r) => r,
-                            None => return false,
-                        };
-                        if let Some(ref q) = query {
-                            let name = row.get(1).and_then(|v| v.as_str()).unwrap_or("");
-                            let ticker = row.get(2).and_then(|v| v.as_str()).unwrap_or("");
-                            name.to_lowercase().contains(q) || ticker.to_lowercase().contains(q)
-                        } else {
-                            true
-                        }
+            // Collect every match before slicing: `matched` is what a caller
+            // pages through, and it cannot be known from one window.
+            let matches: Vec<&Vec<Value>> = rows
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_array)
+                .filter(|row| match query {
+                    Some(ref q) => {
+                        let name = row.get(1).and_then(|v| v.as_str()).unwrap_or("");
+                        let ticker = row.get(2).and_then(|v| v.as_str()).unwrap_or("");
+                        name.to_lowercase().contains(q) || ticker.to_lowercase().contains(q)
+                    }
+                    None => true,
+                })
+                .collect();
+
+            let results: Vec<Value> = matches
+                .iter()
+                .skip(offset)
+                .take(limit)
+                .map(|row| {
+                    json!({
+                        "cik": row.first().cloned().unwrap_or(Value::Null),
+                        "name": row.get(1).cloned().unwrap_or(Value::Null),
+                        "ticker": row.get(2).cloned().unwrap_or(Value::Null),
+                        "exchange": row.get(3).cloned().unwrap_or(Value::Null),
                     })
-                    .take(50)
-                    .map(|row| {
-                        let row = row.as_array().unwrap();
-                        json!({
-                            "cik": row.first().cloned().unwrap_or(Value::Null),
-                            "name": row.get(1).cloned().unwrap_or(Value::Null),
-                            "ticker": row.get(2).cloned().unwrap_or(Value::Null),
-                            "exchange": row.get(3).cloned().unwrap_or(Value::Null),
-                        })
-                    })
-                    .collect(),
-                None => vec![],
-            };
+                })
+                .collect();
 
             let total = rows.map(|r| r.len()).unwrap_or(0);
 
-            Ok(json!({
+            let mut out = json!({
                 "total_tickers": total,
+                "matched": matches.len(),
                 "returned": results.len(),
+                "offset": offset,
                 "query": query.as_deref().unwrap_or("(none)"),
                 "data": results
-            }))
+            });
+            let next_offset = offset + results.len();
+            if !results.is_empty() && next_offset < matches.len() {
+                out["next_offset"] = json!(next_offset);
+            }
+            Ok(out)
         }
 
         "sec_company_facts" => {
@@ -1593,7 +1644,7 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get historical values for a financial concept from SEC XBRL data. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'."
+        description = "Get historical values for a financial concept from SEC XBRL data. Returns the most recent 20 facts by default (in chronological order); 'total_facts' says how many exist, and passing 'next_offset' back as 'offset' pages further into the past. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'."
     )]
     async fn sec_financial_concept(
         &self,
@@ -1613,7 +1664,7 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "List all active SEC-registered tickers with exchange info, optionally filtered by search query. Useful for finding a company's ticker symbol or seeing what's listed on a particular exchange."
+        description = "List all active SEC-registered tickers with exchange info, optionally filtered by search query. Useful for finding a company's ticker symbol or seeing what's listed on a particular exchange. Returns 50 by default; 'matched' says how many fit the query, and passing 'next_offset' back as 'offset' fetches the next page."
     )]
     async fn sec_list_tickers(
         &self,
@@ -1936,6 +1987,23 @@ mod tests {
         let selection = select_hits(&page, None, false, 10);
         assert_eq!(selection.kept.len(), 5);
         assert_eq!(selection.amendments_excluded, 0);
+    }
+
+    #[test]
+    fn the_first_concept_page_is_the_newest_facts_in_order() {
+        // 50 facts, oldest first: the default page is the last 20.
+        assert_eq!(newest_first_window(50, 0, 20), 30..50);
+    }
+
+    #[test]
+    fn later_concept_pages_reach_back_and_stop_at_the_oldest() {
+        assert_eq!(newest_first_window(50, 20, 20), 10..30);
+        // The final page is short rather than wrapping or overlapping.
+        assert_eq!(newest_first_window(50, 40, 20), 0..10);
+        // Past the oldest fact there is nothing, not a panic.
+        assert_eq!(newest_first_window(50, 50, 20), 0..0);
+        assert_eq!(newest_first_window(50, 999, 20), 0..0);
+        assert_eq!(newest_first_window(0, 0, 20), 0..0);
     }
 
     #[test]
