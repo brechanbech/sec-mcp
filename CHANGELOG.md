@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-23
 
 ### Added
 - **Paging for `sec_financial_concept` and `sec_list_tickers`.** Both had
@@ -23,15 +23,10 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   `limit` 100). `sec_list_tickers` adds `matched`, the number of tickers that
   fit the query, alongside the existing `total_tickers` (max `limit` 200).
 
-### Fixed
-- **A Form 3 from an insider who owns nothing no longer looks like a parse
-  failure.** A newly appointed officer files a Form 3 with empty holdings tables
-  and `<noSecuritiesOwned>1</noSecuritiesOwned>`; `sec_insider_transactions`
-  ignored the flag, so the result was indistinguishable from a document it
-  failed to read. It now comes back as `no_securities_owned: true`. Found by the
-  live smoke test on an NVDA Form 3 filed 3 September 2026.
+### Changed
 - **`sec_full_text_search` no longer returns amendments for a base-form
-  filter.** EDGAR matches `forms` against each hit's root form, so `forms:
+  filter.** This changes the default results, which is why this release is
+  0.6.0. EDGAR matches `forms` against each hit's root form, so `forms:
   "10-K"` also returned `10-K/A`s — often partial documents (only Part III, or
   one exhibit) or restatements, easily mistaken for the annual report itself.
   Amendments are now excluded unless asked for, matching the period filters
@@ -45,6 +40,14 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   page reports `amendments_excluded`. A page can now return fewer than `limit`
   hits, so the response carries `next_offset`, which is the only correct place
   to resume — `offset + returned` would revisit skipped hits.
+
+### Fixed
+- **A Form 3 from an insider who owns nothing no longer looks like a parse
+  failure.** A newly appointed officer files a Form 3 with empty holdings tables
+  and `<noSecuritiesOwned>1</noSecuritiesOwned>`; `sec_insider_transactions`
+  ignored the flag, so the result was indistinguishable from a document it
+  failed to read. It now comes back as `no_securities_owned: true`. Found by the
+  live smoke test on an NVDA Form 3 filed 3 September 2026.
 
 ### Security
 - Bumped the TLS stack in `Cargo.lock` to clear RUSTSEC-2026-0346, -0347,
