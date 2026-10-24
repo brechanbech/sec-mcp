@@ -169,7 +169,13 @@ never reused — so the order matters:
    step 6 was never run.
 4. Commit and push; let CI go green before publishing rather than after.
 5. `cargo publish --dry-run`, which compiles *from the packaged copy* and so catches a crate
-   depending on a file it does not ship. Then `cargo publish`.
+   depending on a file it does not ship. Then `cargo publish`. Give both
+   `--target-dir target/package-verify`. Without it, the verify build shares
+   `target/debug` with ordinary builds under the same unit hash, so the
+   binary's fingerprint ends up tracking the packaged `src/main.rs` rather
+   than yours. Later edits then never rebuild `target/debug/sec-mcp`, and the
+   offline stdio test in `tests/live_smoke.rs` silently runs the published
+   code. If that has happened, `cargo clean -p sec-mcp` repairs it.
 6. Publish to the MCP registry, **after** crates.io and not before — the registry verifies the
    namespace by reading `mcp-name` from this crate's *rendered README on crates.io*, and
    `server.json` names a cargo version that must already exist there:

@@ -1641,7 +1641,7 @@ impl SecMcp {
 
     #[tool(
         title = "Look Up CIK by Ticker",
-        description = "Look up the SEC CIK (Central Index Key) number for a company by its stock ticker symbol.",
+        description = "Look up the SEC CIK (Central Index Key) for a stock ticker. The ticker is matched exactly, ignoring case, against SEC's list of active tickers, which is fetched once and cached for an hour, so repeat lookups make no further SEC request. Returns one CIK, zero-padded to 10 digits, with a link to the company's EDGAR page; share classes such as GOOG and GOOGL map to the same CIK. An unknown or delisted ticker is an error, not a guess: use sec_list_tickers to search by company name. The other tools here take tickers directly, so call this only when you need the CIK itself.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_lookup_cik(

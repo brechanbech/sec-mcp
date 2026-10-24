@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
+## [Unreleased]
+
+### Changed
+- **`sec_lookup_cik` says how it behaves.** Its description was one sentence.
+  It now covers how the ticker is matched (exactly, ignoring case, against
+  SEC's active-ticker list, cached for an hour), what comes back (one 10-digit
+  CIK; share classes such as GOOG and GOOGL share it), and that an unknown or
+  delisted ticker is an error that `sec_list_tickers` can resolve by company
+  name. Glama's tool-quality grader rated it the weakest tool in 0.6.1 for
+  leaving exactly those questions open.
+
 ## [0.6.1] - 2026-10-24
 
 ### Added
