@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
+## [Unreleased]
+
+### Added
+- **Tool titles and behaviour annotations.** Every tool now carries a
+  human-readable `title` and MCP `annotations`. The nine query tools are marked
+  `readOnlyHint: true` and `openWorldHint: true`, since they only read from
+  EDGAR. `sec_configure` is marked `readOnlyHint: false`,
+  `destructiveHint: false`, `idempotentHint: true` and `openWorldHint: false`,
+  because it writes only the local config file. Clients use these hints to
+  decide what needs confirmation, and directories grade tools on them: the
+  Claude connector directory requires `readOnlyHint` or `destructiveHint` on
+  every tool, and Glama's tool-quality score marked every sec-mcp tool down
+  for having none. A unit test and the offline stdio test both fail if a tool
+  is added without them.
+
 ## [0.6.0] - 2026-10-23
 
 ### Added

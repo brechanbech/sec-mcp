@@ -852,13 +852,20 @@ fn select_hits<'a>(
         .collect();
     let strict = !include_amendments && !requested.is_empty();
 
-    let mut selection = HitSelection { kept: Vec::new(), consumed: 0, amendments_excluded: 0 };
+    let mut selection = HitSelection {
+        kept: Vec::new(),
+        consumed: 0,
+        amendments_excluded: 0,
+    };
     for hit in hits {
         if selection.kept.len() >= limit {
             break;
         }
         selection.consumed += 1;
-        let form = hit["_source"]["form"].as_str().unwrap_or_default().to_ascii_uppercase();
+        let form = hit["_source"]["form"]
+            .as_str()
+            .unwrap_or_default()
+            .to_ascii_uppercase();
         if strict && is_amendment(&form) && !requested.contains(&form) {
             selection.amendments_excluded += 1;
         } else {
@@ -1023,7 +1030,11 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
             // A ticker is friendlier than a 10-digit CIK, and every other tool
             // here takes one, so resolve it rather than making the caller do it.
-            let ciks = match args["ticker"].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+            let ciks = match args["ticker"]
+                .as_str()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+            {
                 Some(ticker) => Some(client.cik_for_ticker(ticker).await?),
                 None => None,
             };
@@ -1039,7 +1050,10 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 )
                 .await?;
 
-            let forms = args["forms"].as_str().map(str::trim).filter(|f| !f.is_empty());
+            let forms = args["forms"]
+                .as_str()
+                .map(str::trim)
+                .filter(|f| !f.is_empty());
             let include_amendments = args["include_amendments"].as_bool().unwrap_or(false);
             let filtering = forms.is_some() && !include_amendments;
 
@@ -1074,7 +1088,10 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             out.insert("returned".into(), json!(results.len()));
             out.insert("offset".into(), json!(offset));
             if filtering {
-                out.insert("amendments_excluded".into(), json!(selection.amendments_excluded));
+                out.insert(
+                    "amendments_excluded".into(),
+                    json!(selection.amendments_excluded),
+                );
             }
             // With filtering, a page can walk past more hits than it returns,
             // so `offset + returned` would revisit some; `next_offset` is the
@@ -1604,7 +1621,16 @@ impl SecMcp {
 #[tool_router]
 impl SecMcp {
     #[tool(
-        description = "Update the contact email used in SEC EDGAR HTTP requests. The current email is already set — only call this if you need to change it."
+        title = "Configure SEC Contact Email",
+        description = "Update the contact email used in SEC EDGAR HTTP requests. The current email is already set — only call this if you need to change it.",
+        // Writes only the local config file: not read-only, but nothing is
+        // destroyed and EDGAR is never contacted.
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn sec_configure(
         &self,
@@ -1614,7 +1640,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Look up the SEC CIK (Central Index Key) number for a company by its stock ticker symbol."
+        title = "Look Up CIK by Ticker",
+        description = "Look up the SEC CIK (Central Index Key) number for a company by its stock ticker symbol.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_lookup_cik(
         &self,
@@ -1624,7 +1652,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get recent SEC filings (10-K, 10-Q, 8-K, etc.) for a company by ticker symbol. Returns the most recent filings first. When a form_type filter is given, older history is paged in automatically if recent filings don't satisfy the requested limit."
+        title = "Recent Filings",
+        description = "Get recent SEC filings (10-K, 10-Q, 8-K, etc.) for a company by ticker symbol. Returns the most recent filings first. When a form_type filter is given, older history is paged in automatically if recent filings don't satisfy the requested limit.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_recent_filings(
         &self,
@@ -1634,7 +1664,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Optionally filter by form, ticker and date range; a form filter excludes amendments (e.g. '10-K/A') unless include_amendments is set, and any amendment returned is marked 'amendment': true. Each hit comes back with a direct URL to the matching document. To page, pass `next_offset` back as `offset` — filtering means a page can return fewer than `limit` hits. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`, and counts excluded amendments, flagged by `total_is_upper_bound` (or `total_is_approximate` when both apply)."
+        title = "Full-Text Filing Search",
+        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Optionally filter by form, ticker and date range; a form filter excludes amendments (e.g. '10-K/A') unless include_amendments is set, and any amendment returned is marked 'amendment': true. Each hit comes back with a direct URL to the matching document. To page, pass `next_offset` back as `offset` — filtering means a page can return fewer than `limit` hits. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`, and counts excluded amendments, flagged by `total_is_upper_bound` (or `total_is_approximate` when both apply).",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_full_text_search(
         &self,
@@ -1644,7 +1676,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get historical values for a financial concept from SEC XBRL data. Returns the most recent 20 facts by default (in chronological order); 'total_facts' says how many exist, and passing 'next_offset' back as 'offset' pages further into the past. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'."
+        title = "Financial Concept History",
+        description = "Get historical values for a financial concept from SEC XBRL data. Returns the most recent 20 facts by default (in chronological order); 'total_facts' says how many exist, and passing 'next_offset' back as 'offset' pages further into the past. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_financial_concept(
         &self,
@@ -1654,7 +1688,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get general information about a public company from SEC EDGAR: SIC code, industry, state of incorporation, fiscal year end, addresses, and exchange listings."
+        title = "Company Info",
+        description = "Get general information about a public company from SEC EDGAR: SIC code, industry, state of incorporation, fiscal year end, addresses, and exchange listings.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_company_info(
         &self,
@@ -1664,7 +1700,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "List all active SEC-registered tickers with exchange info, optionally filtered by search query. Useful for finding a company's ticker symbol or seeing what's listed on a particular exchange. Returns 50 by default; 'matched' says how many fit the query, and passing 'next_offset' back as 'offset' fetches the next page."
+        title = "List Tickers",
+        description = "List all active SEC-registered tickers with exchange info, optionally filtered by search query. Useful for finding a company's ticker symbol or seeing what's listed on a particular exchange. Returns 50 by default; 'matched' says how many fit the query, and passing 'next_offset' back as 'offset' fetches the next page.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_list_tickers(
         &self,
@@ -1674,7 +1712,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get all available XBRL financial facts for a company — useful for discovering what concepts (metrics) a company reports before querying specific values with sec_financial_concept."
+        title = "Company XBRL Facts",
+        description = "Get all available XBRL financial facts for a company — useful for discovering what concepts (metrics) a company reports before querying specific values with sec_financial_concept.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_company_facts(
         &self,
@@ -1684,7 +1724,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true."
+        title = "Insider Transactions",
+        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true.",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_insider_transactions(
         &self,
@@ -1694,7 +1736,9 @@ impl SecMcp {
     }
 
     #[tool(
-        description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns top entries sorted by value. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default)."
+        title = "Cross-Company XBRL Frames",
+        description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns top entries sorted by value. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
+        annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_xbrl_frames(
         &self,
@@ -1853,7 +1897,12 @@ mod tests {
     fn an_unaddressable_hit_id_is_rejected() {
         // No colon, or an empty half: there is no document to point at, and
         // guessing one would produce a URL that 404s for the caller.
-        for bad in ["0001628280-26-037664", ":deck.htm", "0001628280-26-037664:", ""] {
+        for bad in [
+            "0001628280-26-037664",
+            ":deck.htm",
+            "0001628280-26-037664:",
+            "",
+        ] {
             assert_eq!(split_hit_id(bad), None, "{bad:?} should not split");
         }
     }
@@ -1910,7 +1959,10 @@ mod tests {
         let slim = slim_search_hit(&sample_hit());
         let rendered = slim.to_string();
         for noise in ["film_num", "file_num", "sics", "inc_states", "root_forms"] {
-            assert!(!rendered.contains(noise), "{noise} should not survive: {rendered}");
+            assert!(
+                !rendered.contains(noise),
+                "{noise} should not survive: {rendered}"
+            );
         }
         // An empty `items` array says nothing, so it is omitted rather than sent.
         assert!(slim.get("items").is_none(), "empty items should be omitted");
@@ -2056,5 +2108,40 @@ mod tests {
         let xml = form3_no_securities().replace("<noSecuritiesOwned>1</noSecuritiesOwned>", "");
         let doc = parse_ownership_document(&xml).unwrap();
         assert!(doc.get("no_securities_owned").is_none());
+    }
+
+    /// Directories and clients decide how far to trust a tool from its
+    /// annotations, so a new tool must not ship without them.
+    #[test]
+    fn every_tool_carries_a_title_and_behaviour_hints() {
+        let tools = SecMcp::tool_router().list_all();
+        assert_eq!(tools.len(), 10);
+        for tool in &tools {
+            let name = tool.name.as_ref();
+            assert!(tool.title.is_some(), "{name} has no title");
+            let hints = tool
+                .annotations
+                .as_ref()
+                .unwrap_or_else(|| panic!("{name} has no annotations"));
+            assert!(
+                hints.open_world_hint.is_some(),
+                "{name} has no openWorldHint"
+            );
+            match name {
+                "sec_configure" => {
+                    assert_eq!(hints.read_only_hint, Some(false));
+                    assert_eq!(hints.destructive_hint, Some(false));
+                    assert_eq!(hints.open_world_hint, Some(false));
+                }
+                _ => {
+                    assert_eq!(
+                        hints.read_only_hint,
+                        Some(true),
+                        "{name} should be read-only"
+                    );
+                    assert_eq!(hints.open_world_hint, Some(true), "{name} reads EDGAR");
+                }
+            }
+        }
     }
 }

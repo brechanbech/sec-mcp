@@ -264,10 +264,19 @@ fn live_smoke() {
                 "limit": 5, "offset": offset })
     };
     let newest = server.call_tool("sec_financial_concept", concept_page(0));
-    assert_eq!(newest["next_offset"], json!(5), "page one must point at page two: {newest}");
+    assert_eq!(
+        newest["next_offset"],
+        json!(5),
+        "page one must point at page two: {newest}"
+    );
     let older = server.call_tool("sec_financial_concept", concept_page(5));
-    let period_end = |page: &Value, idx: usize| page["data"][idx]["end"].as_str().map(str::to_owned);
-    assert_eq!(older["returned"], json!(5), "page two came back short: {older}");
+    let period_end =
+        |page: &Value, idx: usize| page["data"][idx]["end"].as_str().map(str::to_owned);
+    assert_eq!(
+        older["returned"],
+        json!(5),
+        "page two came back short: {older}"
+    );
     assert!(
         period_end(&older, 4) <= period_end(&newest, 0),
         "page two should reach back before page one: {older} vs {newest}"
@@ -506,10 +515,7 @@ fn protocol_surface() {
 
     // Named rather than merely counted: a count catches a tool vanishing but not
     // one being renamed, and the name is the part clients bind to.
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     for expected in [
         "sec_company_facts",
         "sec_company_info",
@@ -522,7 +528,26 @@ fn protocol_surface() {
         "sec_recent_filings",
         "sec_xbrl_frames",
     ] {
-        assert!(names.contains(&expected), "{expected} missing from {names:?}");
+        assert!(
+            names.contains(&expected),
+            "{expected} missing from {names:?}"
+        );
+    }
+
+    // Titles and behaviour hints on the wire, not just in the router: directories
+    // grade tools on them, and the Claude directory requires `readOnlyHint` or
+    // `destructiveHint` on every tool.
+    for tool in tools {
+        let name = &tool["name"];
+        assert!(tool["title"].is_string(), "{name} has no title: {tool}");
+        assert!(
+            tool["annotations"]["readOnlyHint"].is_boolean(),
+            "{name} has no readOnlyHint: {tool}"
+        );
+        assert!(
+            tool["annotations"]["openWorldHint"].is_boolean(),
+            "{name} has no openWorldHint: {tool}"
+        );
     }
 
     // The server sandbox starts unconfigured, so `sec_configure` must carry the
