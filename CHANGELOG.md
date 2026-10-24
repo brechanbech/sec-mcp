@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
-## [Unreleased]
+## [0.6.1] - 2026-10-24
 
 ### Added
 - **Tool titles and behaviour annotations.** Every tool now carries a
