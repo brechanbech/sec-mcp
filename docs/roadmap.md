@@ -190,7 +190,77 @@ obstacles are elsewhere, and two of the three sit outside the code:
 
 **If revisited, scope it honestly to the tractable half**: "what does manager X
 hold", taking a CIK, reporting issuer names as filed. That is a real capability,
-but a much smaller promise than "who holds this stock".
+but a much smaller promise than "who holds this stock". Item 5 removes obstacle 2.
+
+## Beyond the documented API (recorded 24 October 2026)
+
+With item 1 and item 3 shipped, sec-mcp uses all four documented `data.sec.gov`
+APIs. Everything below is in the Archives or on undocumented endpoints, so each
+needs a `tests/live_smoke.rs` assertion from day one, as full-text search did.
+
+**Tool count is now a cost, not a score.** Ten tools rated 5/5 on Glama's
+tool-count dimension ("a well-scoped set"). Every tool added costs context in
+every session and makes the right tool harder to pick, so before adding one,
+ask whether it extends an existing tool instead. The notes below say where it
+could.
+
+## 5. Company name → CIK
+
+Every tool starts from a ticker, so filers without one are unreachable: most
+13F managers, private issuers filing Form D, funds, individual insiders.
+`sec_lookup_cik("Bridgewater Associates")` fails today. Two sources, both
+verified 24 October 2026:
+
+- **`https://www.sec.gov/Archives/edgar/cik-lookup-data.txt`**: every EDGAR
+  entity as `NAME:CIK:` lines. About 40 MB (11.6 MB gzipped), 1.06 million
+  lines, rebuilt daily. It is complete and needs no undocumented endpoint, but
+  it is too large to fetch per request, so it would need a disk cache, and
+  names are as filed, with no ranking and frequent near-duplicates
+  (`… HOLDINGS, INC.` and `… HOLDINGS, LLC` on one CIK).
+- **`https://efts.sec.gov/LATEST/search-index?keysTyped=<name>`**: the
+  company autocomplete behind EDGAR's search box. It is ranked, returns
+  tickers where they exist, and costs one small request. `bridgewater
+  associates` returns "Bridgewater Associates, LP" (CIK 1350694) first. It is
+  undocumented, like full-text search on the same host.
+
+The autocomplete is the better fit for interactive use. **It could extend
+`sec_lookup_cik`** (a `name` parameter beside `ticker`) rather than add a tool.
+**Effort: low.** It unblocks item 4 and the Form D half of item 7.
+
+## 6. Latest filings
+
+Every tool starts from a company. Nothing answers a question that starts from
+*time*: "which 8-Ks were filed today", "any new 13D this week".
+`https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&count=…&output=atom`
+returns an Atom feed of current filings, filterable by form (verified
+24 October 2026). The daily indexes under `/Archives/edgar/daily-index/` cover
+past days. Full-text search with a date range overlaps but needs a query
+string. **Effort: low to moderate**: the Atom feed needs an XML parse, which
+`roxmltree` already provides. This is a genuinely new kind of question, so a new
+tool is justified here.
+
+## 7. More structured ownership and offering forms
+
+The same pattern as `sec_insider_transactions`: find the filing through
+submissions or full-text search, then read its `primary_doc.xml`. All three
+were confirmed as XML against live October 2026 filings.
+
+- **Form 144**, notice of a proposed sale by an insider. Electronic filing has
+  been mandatory since 13 April 2023 (namespace `http://www.sec.gov/edgar/ownership`).
+  It pairs with Forms 3/4/5, and a 144 often precedes a Form 4 sale, so it
+  **could extend `sec_insider_transactions`** rather than add a tool.
+- **Schedules 13D and 13G**, holders above 5%. Structured XML has been
+  mandatory since 18 December 2024 (schema `X0202`, namespace
+  `http://www.sec.gov/edgar/schedule13g` for 13G). Exhibits stay
+  unstructured, and only filings from that date on are XML: older ones are
+  HTML or ASCII and should be reported as unreadable rather than scraped.
+- **Form D**, exempt offerings and private placements (schema `X0708`). Most
+  issuers have no ticker, so this depends on item 5.
+
+**Effort: moderate per form**, but the parser and the `get_text` path exist
+already. 13D/13G is the most valuable of the three: it is the only free,
+structured answer to "who holds more than 5% of this company", the question
+item 4 cannot answer.
 
 ## Explicitly rejected
 
