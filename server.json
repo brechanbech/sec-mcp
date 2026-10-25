@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.brechanbech/sec-mcp",
   "title": "SEC EDGAR",
-  "description": "MCP server for SEC EDGAR data — company filings, financial concepts, and company info",
+  "description": "Rust MCP server for SEC EDGAR data — company filings, financial concepts, and company info",
   "version": "0.6.1",
   "websiteUrl": "https://codeberg.org/brechanbech/sec-mcp",
   "repository": {
