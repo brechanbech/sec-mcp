@@ -8,7 +8,17 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-26
+
 ### Changed
+- **rmcp 3.4.0 → 3.7.0.** No code changes were needed. The stdio-relevant
+  fixes come along: a bounded incoming-line buffer, pending requests cancelled
+  at EOF, and malformed JSON-RPC rejected. Builds with `--locked`, Glama's
+  among them, were still on 3.4.0.
+- **The listings say it is written in Rust.** The README's opening line and
+  the `server.json` description, which the MCP registry shows, both now say
+  so. The README adds that it runs as a single native binary with no Node,
+  Python or Docker runtime.
 - **`sec_lookup_cik` says how it behaves.** Its description was one sentence.
   It now covers how the ticker is matched (exactly, ignoring case, against
   SEC's active-ticker list, cached for an hour), what comes back (one 10-digit
