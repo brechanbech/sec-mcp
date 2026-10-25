@@ -2,7 +2,7 @@
 
 [![audit](https://codeberg.org/brechanbech/sec-mcp/actions/workflows/audit.yml/badge.svg)](https://codeberg.org/brechanbech/sec-mcp/actions)
 
-A [Model Context Protocol](https://modelcontextprotocol.io/) server, written in Rust, that gives Claude Desktop access to SEC EDGAR data — company filings, financial statements, and company info. No API key needed. It runs as a single native binary, with no Node, Python or Docker runtime behind it.
+A [Model Context Protocol](https://modelcontextprotocol.io/) server that gives Claude Desktop access to SEC EDGAR data — company filings, financial statements, and company info. No API key needed. It runs as a single native binary, with no Node, Python or Docker runtime behind it.
 
 ## Why an MCP for this?
 
