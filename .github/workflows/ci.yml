@@ -1,0 +1,68 @@
+name: ci
+
+# Builds and tests on GitHub's hosted runners, which the mirror gets for free.
+# Codeberg's audit workflow only resolves Cargo.lock against RUSTSEC; its small
+# shared runner is no place to compile. This one compiles: formatting, clippy
+# with warnings denied, and the offline test suite, on Linux and on macOS (the
+# two platforms the README claims), plus a build on the declared MSRV. The live
+# EDGAR suite stays skipped: it needs SEC_MCP_LIVE_EMAIL, which is not set here.
+#
+# The `if: github.server_url` guard keeps every job GitHub-only. Forgejo reads
+# .forgejo/workflows in preference to this directory, but the guard makes the
+# file inert on Codeberg even if that ever changes.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    if: github.server_url == 'https://github.com'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # rustup is preinstalled on the hosted runners; no third-party action.
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal -c clippy,rustfmt
+          rustup default stable
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+  msrv:
+    # `rust-version` in Cargo.toml is a promise; this keeps it honest.
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.88
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup default 1.88.0
+
+      - name: Build
+        run: cargo build --locked --all-targets
