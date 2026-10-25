@@ -185,3 +185,8 @@ never reused — so the order matters:
    mcp-publisher login github  # interactive, for the io.github.brechanbech/* namespace
    mcp-publisher publish
    ```
+
+7. Create a release for the tag on **both** Codeberg and the GitHub mirror, with the
+   version's CHANGELOG section as notes. A tag alone is not a release: Glama reads the
+   GitHub mirror and reported "No stable releases found" while it carried every tag
+   and no release.
