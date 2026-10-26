@@ -8,6 +8,8 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-26
+
 ### Added
 - **Latest filings across EDGAR.** `sec_recent_filings` with no `ticker` now
   answers questions that start from a time rather than a company: "which 8-Ks
