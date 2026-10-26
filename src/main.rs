@@ -178,12 +178,32 @@ impl EdgarClient {
         Ok(map)
     }
 
-    async fn cik_for_ticker(&self, ticker: &str) -> Result<String> {
-        let upper = ticker.to_uppercase();
+    /// Resolve a tool's `ticker` argument, which may also be a CIK.
+    ///
+    /// SEC's ticker file lists only *current* tickers, so a company that was
+    /// acquired, went bankrupt or changed its ticker drops out of it while its
+    /// filings stay in EDGAR under the same CIK: US Steel's `X` after Nippon
+    /// Steel, Spirit Airlines' `SAVE`. A CIK is taken as given, with no lookup;
+    /// a wrong one surfaces as EDGAR's own 404.
+    async fn resolve_company(&self, ident: &str) -> Result<Company> {
+        if let Some(cik) = parse_cik(ident) {
+            return Ok(Company { cik, ticker: None });
+        }
+        let upper = ident.trim().to_uppercase();
         let map = self.ticker_map().await?;
-        map.get(&upper)
-            .cloned()
-            .with_context(|| format!("ticker '{ticker}' not found in EDGAR"))
+        match map.get(&upper) {
+            Some(cik) => Ok(Company {
+                cik: cik.clone(),
+                ticker: Some(upper),
+            }),
+            None => anyhow::bail!(
+                "ticker '{ident}' is not in SEC's list of current tickers. Delisted, \
+                 acquired and renamed companies drop out of that list but stay in EDGAR: \
+                 pass the company's CIK instead (sec_full_text_search hits and \
+                 sec_xbrl_frames rows carry one), or search current names with \
+                 sec_list_tickers."
+            ),
+        }
     }
 
     async fn recent_filings(&self, cik: &str) -> Result<Value> {
@@ -364,13 +384,15 @@ struct ConfigureParams {
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct LookupCikParams {
-    /// Stock ticker symbol, e.g. AAPL, MSFT, TSLA
+    /// Stock ticker symbol, e.g. AAPL, MSFT, TSLA. A CIK (e.g. 1163302) is also
+    /// accepted and returns that company's name and current tickers.
     ticker: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct RecentFilingsParams {
-    /// Stock ticker symbol
+    /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
+    /// current ticker (delisted, acquired or renamed)
     ticker: String,
     /// Optional filter: '10-K', '10-Q', '8-K', etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -399,7 +421,7 @@ struct FullTextSearchParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "bool", extend("default" = false))]
     include_amendments: Option<bool>,
-    /// Optional: restrict to one company by ticker
+    /// Optional: restrict to one company by ticker or CIK
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
     ticker: Option<String>,
@@ -423,7 +445,8 @@ struct FullTextSearchParams {
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct FinancialConceptParams {
-    /// Stock ticker symbol
+    /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
+    /// current ticker (delisted, acquired or renamed)
     ticker: String,
     /// XBRL concept name, e.g. 'Revenues', 'NetIncomeLoss'
     concept: String,
@@ -453,7 +476,8 @@ struct FinancialConceptParams {
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct CompanyInfoParams {
-    /// Stock ticker symbol
+    /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
+    /// current ticker (delisted, acquired or renamed)
     ticker: String,
 }
 
@@ -476,7 +500,8 @@ struct ListTickersParams {
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct CompanyFactsParams {
-    /// Stock ticker symbol
+    /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
+    /// current ticker (delisted, acquired or renamed)
     ticker: String,
     /// Taxonomy to list: 'us-gaap' (default), 'ifrs-full', 'dei', or omit to list all
     //
@@ -490,7 +515,8 @@ struct CompanyFactsParams {
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct InsiderTransactionsParams {
-    /// Stock ticker symbol
+    /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
+    /// current ticker (delisted, acquired or renamed)
     ticker: String,
     /// Number of insider filings to read (default 5, max 20). Each filing is one insider's report.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -719,6 +745,32 @@ fn parse_ownership_document(xml: &str) -> Result<Value> {
 fn split_hit_id(id: &str) -> Option<(&str, &str)> {
     id.split_once(':')
         .filter(|(accession, document)| !accession.is_empty() && !document.is_empty())
+}
+
+/// The company a tool's `ticker` argument named.
+struct Company {
+    /// Zero-padded to 10 digits, as every `data.sec.gov` path wants it.
+    cik: String,
+    /// Upper-cased; `None` when the caller passed a CIK.
+    ticker: Option<String>,
+}
+
+/// Read a `ticker` argument as a CIK if it is one: `320193`, `0000320193` or
+/// `CIK0000320193`.
+///
+/// No current ticker is all digits, so digits alone mean a CIK. Zero is not a
+/// CIK, and more than 10 digits cannot be one.
+fn parse_cik(ident: &str) -> Option<String> {
+    let ident = ident.trim();
+    let digits = match ident.get(..3) {
+        Some(prefix) if prefix.eq_ignore_ascii_case("cik") => &ident[3..],
+        _ => ident,
+    };
+    if digits.is_empty() || digits.len() > 10 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let n: u64 = digits.parse().ok()?;
+    (n > 0).then(|| format!("{n:010}"))
 }
 
 /// Pull the ticker out of a full-text-search `display_names` entry.
@@ -1006,14 +1058,23 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
         "sec_lookup_cik" => {
             let client = state.read().await.client()?;
             let ticker = args["ticker"].as_str().context("ticker required")?;
-            let cik = client.cik_for_ticker(ticker).await?;
-            Ok(json!({
-                "ticker": ticker.to_uppercase(),
+            let company = client.resolve_company(ticker).await?;
+            let cik = &company.cik;
+            let mut out = json!({
+                "ticker": company.ticker,
                 "cik": cik,
                 "edgar_url": format!(
                     "https://www.sec.gov/edgar/browse/?CIK={cik}"
                 )
-            }))
+            });
+            // Given a CIK, the useful answer is whose it is, which also checks it
+            // exists: submissions 404s on a CIK EDGAR has never assigned.
+            if company.ticker.is_none() {
+                let data = client.recent_filings(cik).await?;
+                out["name"] = data["name"].clone();
+                out["current_tickers"] = data["tickers"].clone();
+            }
+            Ok(out)
         }
 
         "sec_full_text_search" => {
@@ -1035,7 +1096,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .map(str::trim)
                 .filter(|t| !t.is_empty())
             {
-                Some(ticker) => Some(client.cik_for_ticker(ticker).await?),
+                Some(ticker) => Some(client.resolve_company(ticker).await?.cik),
                 None => None,
             };
 
@@ -1122,7 +1183,8 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .to_string();
             let form_filter_owned = args["form_type"].as_str().map(|s| s.to_string());
             let limit = args["limit"].as_u64().unwrap_or(10).min(40) as usize;
-            let cik = client.cik_for_ticker(&ticker).await?;
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
             let data = client.recent_filings(&cik).await?;
 
             let form_filter = form_filter_owned.as_deref();
@@ -1168,7 +1230,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
             Ok(json!({
                 "company": company_name,
-                "ticker": ticker.to_uppercase(),
+                "ticker": company.ticker,
                 "cik": cik,
                 "filings": filings
             }))
@@ -1186,7 +1248,8 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .to_string();
             let taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
             let period_filter_owned = args["period"].as_str().map(|s| s.to_string());
-            let cik = client.cik_for_ticker(&ticker).await?;
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
             let data = client.company_concept(&cik, &taxonomy, &concept).await?;
 
             let period_filter = period_filter_owned.as_deref();
@@ -1237,7 +1300,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
             let mut result = json!({
                 "company": entity,
-                "ticker": ticker.to_uppercase(),
+                "ticker": company.ticker,
                 "cik": cik,
                 "concept": concept,
                 "taxonomy": taxonomy,
@@ -1274,12 +1337,13 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .as_str()
                 .context("ticker required")?
                 .to_string();
-            let cik = client.cik_for_ticker(&ticker).await?;
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
             let data = client.recent_filings(&cik).await?;
 
             Ok(json!({
                 "name": data["name"],
-                "ticker": ticker.to_uppercase(),
+                "ticker": company.ticker,
                 "cik": cik,
                 "sic": data["sic"],
                 "sic_description": data["sicDescription"],
@@ -1358,7 +1422,8 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .context("ticker required")?
                 .to_string();
             let taxonomy_filter = args["taxonomy"].as_str().map(|s| s.to_string());
-            let cik = client.cik_for_ticker(&ticker).await?;
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
             let data = client.company_facts(&cik).await?;
 
             let entity = data["entityName"].as_str().unwrap_or("Unknown").to_string();
@@ -1391,7 +1456,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
             Ok(json!({
                 "company": entity,
-                "ticker": ticker.to_uppercase(),
+                "ticker": company.ticker,
                 "cik": cik,
                 "taxonomies": taxonomies
             }))
@@ -1463,7 +1528,8 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, 20) as usize;
             let form_filter = args["form_type"].as_str().map(|s| s.to_string());
 
-            let cik = client.cik_for_ticker(&ticker).await?;
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
             let data = client.recent_filings(&cik).await?;
             let cik_num = cik.trim_start_matches('0').to_string();
 
@@ -1542,7 +1608,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
             let mut result = json!({
                 "company": data["name"],
-                "ticker": ticker.to_uppercase(),
+                "ticker": company.ticker,
                 "cik": cik,
                 "returned": filings.len(),
                 "filings": filings,
@@ -1641,7 +1707,7 @@ impl SecMcp {
 
     #[tool(
         title = "Look Up CIK by Ticker",
-        description = "Look up the SEC CIK (Central Index Key) for a stock ticker. The ticker is matched exactly, ignoring case, against SEC's list of active tickers, which is fetched once and cached for an hour, so repeat lookups make no further SEC request. Returns one CIK, zero-padded to 10 digits, with a link to the company's EDGAR page; share classes such as GOOG and GOOGL map to the same CIK. An unknown or delisted ticker is an error, not a guess: use sec_list_tickers to search by company name. The other tools here take tickers directly, so call this only when you need the CIK itself.",
+        description = "Look up the SEC CIK (Central Index Key) for a stock ticker. The ticker is matched exactly, ignoring case, against SEC's list of active tickers, which is fetched once and cached for an hour, so repeat lookups make no further SEC request. Returns one CIK, zero-padded to 10 digits, with a link to the company's EDGAR page; share classes such as GOOG and GOOGL map to the same CIK. An unknown ticker is an error, not a guess: use sec_list_tickers to search by company name. A delisted, acquired or renamed company is no longer in that list but is still in EDGAR, and every tool here accepts its CIK in place of a ticker. Given a CIK, this returns the company's name and current tickers, which confirms whose it is. The other tools take tickers directly, so call this only when you need the CIK itself.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_lookup_cik(
@@ -1904,6 +1970,28 @@ mod tests {
             "",
         ] {
             assert_eq!(split_hit_id(bad), None, "{bad:?} should not split");
+        }
+    }
+
+    #[test]
+    fn a_cik_is_read_in_any_of_its_written_forms() {
+        for form in [
+            "1163302",
+            "0001163302",
+            "CIK0001163302",
+            "cik1163302",
+            " 1163302 ",
+        ] {
+            assert_eq!(parse_cik(form).as_deref(), Some("0001163302"), "{form:?}");
+        }
+    }
+
+    #[test]
+    fn a_ticker_is_not_mistaken_for_a_cik() {
+        // Tickers carry letters, sometimes a dash or a dot; none is all digits.
+        // Zero and anything over 10 digits cannot be a CIK either.
+        for not_cik in ["AAPL", "BRK-B", "BF.B", "X", "CIK", "0", "12345678901", ""] {
+            assert_eq!(parse_cik(not_cik), None, "{not_cik:?}");
         }
     }
 

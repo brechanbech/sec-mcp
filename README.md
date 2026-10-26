@@ -79,6 +79,11 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_company_facts` | Discover all XBRL concepts (metrics) a company reports |
 | `sec_xbrl_frames` | Cross-company comparison of a financial metric for a given period |
 
+Wherever a tool takes a ticker, it also takes a CIK (`1163302`, `0001163302` or
+`CIK0001163302`). SEC's ticker list holds only current tickers, so a company that
+was acquired, delisted or renamed is reachable only by CIK. Full-text search hits
+and frames rows carry one.
+
 ## Amendments (`10-K/A` and friends)
 
 A form ending in `/A` amends one filed earlier. A `10-K/A` is often **not** a

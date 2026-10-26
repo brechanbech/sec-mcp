@@ -189,6 +189,27 @@ fn live_smoke() {
     let cik = server.call_tool("sec_lookup_cik", json!({ "ticker": "AAPL" }));
     assert_eq!(cik["cik"].as_str(), Some("0000320193"), "AAPL CIK: {cik}");
 
+    // A company with no current ticker is reachable by CIK. US Steel left SEC's
+    // ticker list when Nippon Steel took it private, but its filings stay in
+    // EDGAR; the October 2026 benchmark lost three questions to this.
+    let by_cik = server.call_tool("sec_lookup_cik", json!({ "ticker": "1163302" }));
+    assert!(
+        by_cik["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_lowercase()
+            .contains("steel"),
+        "CIK 1163302 should be US Steel: {by_cik}"
+    );
+    let delisted = server.call_tool(
+        "sec_financial_concept",
+        json!({ "ticker": "1163302", "concept": "InventoryNet", "period": "annual", "limit": 1 }),
+    );
+    assert!(
+        delisted["data"][0]["val"].is_number(),
+        "inventory by CIK: {delisted}"
+    );
+
     // Company facts: the hostile XBRL shape decodes and carries us-gaap concepts.
     let facts = server.call_tool("sec_company_facts", json!({ "ticker": "AAPL" }));
     assert!(

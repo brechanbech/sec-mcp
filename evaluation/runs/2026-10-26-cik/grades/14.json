@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "CoS: $14,060",
+      "met": true
+    },
+    {
+      "criterion": "Avg. Inventory: $2,168",
+      "met": false
+    },
+    {
+      "criterion": "Inventory Turnover = 6.49",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The COGS of $14,060M matches. However, the answer gives average inventory as $2,148M and turnover as about 6.55x, which conflicts with the expected $2,168 and 6.49. It mentions 6.49 only as an alternative calculation using year-end inventory, while its headline answer is 6.55. That counts as a contradiction.",
+  "id": 14
+}

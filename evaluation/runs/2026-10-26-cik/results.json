@@ -1,0 +1,58 @@
+[
+  {
+    "id": 0,
+    "grade": "partial",
+    "contradiction": false,
+    "period_mismatch": false,
+    "reason": "The answer says the 3 Jan 2025 8-K exhibits carry the presidential order that blocked the deal, which meets the executive-order criterion. It does not mention the $7.3B unsolicited offer, U.S. Steel's rejection over strategic fit and undervaluation, or the late-2023 timing. Its suggestion that U.S. Steel later pushed for the deal is a hedged inference about later events. It does not directly deny the earlier rejection, so I did not count it as a contradiction.",
+    "tool_calls": 9,
+    "cost_usd": 0.2269456,
+    "cited": 16,
+    "after_cutoff": [],
+    "unverified": [],
+    "type": "Market Analysis",
+    "question": "How has US Steel addressed its planned merger with Nippton Steel and its effect on its business operations?"
+  },
+  {
+    "id": 14,
+    "grade": "wrong",
+    "contradiction": true,
+    "period_mismatch": false,
+    "reason": "The COGS of $14,060M matches. However, the answer gives average inventory as $2,148M and turnover as about 6.55x, which conflicts with the expected $2,168 and 6.49. It mentions 6.49 only as an alternative calculation using year-end inventory, while its headline answer is 6.55. That counts as a contradiction.",
+    "tool_calls": 5,
+    "cost_usd": 0.1056442,
+    "cited": 2,
+    "after_cutoff": [],
+    "unverified": [],
+    "type": "Numerical Reasoning",
+    "question": "Calculate the inventory turnover for US Steel in FY2024."
+  },
+  {
+    "id": 28,
+    "grade": "no_answer",
+    "contradiction": false,
+    "period_mismatch": false,
+    "reason": "The answer says the values were not found. It names some KPI terms but gives no FY 2024 figures, so it meets no criterion.",
+    "tool_calls": 7,
+    "cost_usd": 0.1372346,
+    "cited": 1,
+    "after_cutoff": [],
+    "unverified": [],
+    "type": "Qualitative Retrieval",
+    "question": "List the Operating KPIs Spirit Airlines (NYSE: SAVE) tracked in FY 2024. Provide the KPI and FY 2024 Total."
+  },
+  {
+    "id": 36,
+    "grade": "wrong",
+    "contradiction": true,
+    "period_mismatch": false,
+    "reason": "The answer's headline figure is about $4.79 billion, which it got by adding up yearly restructuring charges. That rounds to $4.8B, not the expected $4.7B. The answer also says it could not confirm WBD's disclosed cumulative figure. It never states $4.7B, so the correctness criterion is not met, and the $4.79B figure conflicts with the expected answer.",
+    "tool_calls": 9,
+    "cost_usd": 0.1150964,
+    "cited": 3,
+    "after_cutoff": [],
+    "unverified": [],
+    "type": "Quantitative Retrieval",
+    "question": "As of Dec 31, 2024, what was Warner Discovery's (NASDQ: WBD) Total Restructuring Costs incurred as a result of its 2022 Merger? "
+  }
+]

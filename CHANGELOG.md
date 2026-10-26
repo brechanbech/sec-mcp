@@ -8,6 +8,17 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- **Every tool accepts a CIK where it takes a ticker.** SEC's ticker list holds
+  only current tickers, so a company that was acquired, went bankrupt or
+  changed its ticker dropped out of reach, although its filings stay in EDGAR.
+  US Steel (`X`, taken private by Nippon Steel) and Spirit Airlines (`SAVE`)
+  were two such companies. The `ticker` field now also takes a CIK, written as
+  `1163302`, `0001163302` or `CIK0001163302`. `sec_lookup_cik` given a CIK
+  returns the company's name and current tickers, and a ticker that is not
+  found now says to pass the CIK instead. The October 2026 Finance Agent
+  Benchmark baseline lost four questions to this.
+
 ## [0.6.2] - 2026-10-26
 
 ### Changed
