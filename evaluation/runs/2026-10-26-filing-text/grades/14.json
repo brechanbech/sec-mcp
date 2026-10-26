@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "CoS: $14,060",
+      "met": true
+    },
+    {
+      "criterion": "Avg. Inventory: $2,168",
+      "met": false
+    },
+    {
+      "criterion": "Inventory Turnover = 6.49",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The cost of sales figure matches ($14,060M). The answer's headline result does not. It gives average inventory as $2,148M and turnover as about 6.55x, while the expected answer has $2,168 and 6.49. The answer does mention 6.49x, but only as a secondary check using year-end inventory. It never gives that as its answer, so the headline figures contradict the expected ones.",
+  "id": 14
+}

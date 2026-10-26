@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "Purchase loan originations: $12,057,993 in thousands",
+      "met": true
+    },
+    {
+      "criterion": "Refinance loan originations: $5,250,321 in thousands",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 9M 2024 purchase of $12,057,993K and refinance of $5,250,321K, which match the expected figures exactly. The extra details (prior-year figures, Q3 numbers) don't conflict with the expected answer.",
+  "id": 31
+}

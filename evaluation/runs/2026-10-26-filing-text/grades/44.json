@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "In 2024, Airbnb adjusted its EBITDA by $1,407,000,000 to exclude stock-based compensation expense",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives $1.407 billion of FY2024 stock-based compensation, which matches the expected $1,407,000,000. It describes the figure as a cash-flow add-back rather than an Adjusted EBITDA adjustment. That framing is different, but the amount and the period both match, so it doesn't conflict with the expected answer.",
+  "id": 44
+}

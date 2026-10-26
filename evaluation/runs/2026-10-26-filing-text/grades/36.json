@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Warner Discovery's Total Restructuring Costs as of Dec 31, 2024, were $4.7 Billion",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives about $4.7 billion in total merger-related restructuring charges as of Dec 31, 2024. That matches the expected answer. The extra context (the $4.1–5.3B estimate range and the cash portion) doesn't conflict with it.",
+  "id": 36
+}

@@ -1,0 +1,73 @@
+{
+  "criteria": [
+    {
+      "criterion": "Average aircraft: 209.9",
+      "met": true
+    },
+    {
+      "criterion": "Aircraft at end of period: 213",
+      "met": true
+    },
+    {
+      "criterion": "Average daily aircraft utilization (hours): 9.9",
+      "met": true
+    },
+    {
+      "criterion": "Departures: 288,180",
+      "met": true
+    },
+    {
+      "criterion": "Passenger flight segments (PFSs): 44,180,000",
+      "met": true
+    },
+    {
+      "criterion": "Revenue passenger miles (RPMs): 43,671,009,000",
+      "met": true
+    },
+    {
+      "criterion": "Available seat miles (ASMs): 53,017,948,000",
+      "met": true
+    },
+    {
+      "criterion": "Load factor: 0.824",
+      "met": true
+    },
+    {
+      "criterion": "Total revenue per passenger flight segment: $111.21",
+      "met": true
+    },
+    {
+      "criterion": "Average yield (cents): $0.11",
+      "met": true
+    },
+    {
+      "criterion": "TRASM (cents): $0.93",
+      "met": true
+    },
+    {
+      "criterion": "CASM (cents): $0.11",
+      "met": true
+    },
+    {
+      "criterion": "Adjusted CASM (cents): $0.11",
+      "met": true
+    },
+    {
+      "criterion": "Adjusted CASM ex-fuel (cents): $0.80",
+      "met": true
+    },
+    {
+      "criterion": "Fuel gallons consumed: 551,819,000",
+      "met": true
+    },
+    {
+      "criterion": "Average fuel cost per gallon: $2.68",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "All 16 KPIs are listed, and the values agree with the expected answer once the units are lined up. PFSs, RPMs, ASMs and fuel gallons are shown in thousands, and the load factor is shown as 82.4%, which equals 0.824. The expected answer gives the per-ASM and yield metrics in inconsistent units. Yield of 11.25¢, CASM of 11.35¢ and Adjusted CASM of 10.76¢ convert to about $0.11, which matches. TRASM of 9.27¢ and Adjusted CASM ex-fuel of 7.97¢ have the same digits as the expected $0.93 and $0.80, off only by a factor of 10. That points to a scaling error in the expected answer, not a different figure, so I treated these as met. The period is FY2024 as asked, and the answer contains no contradictions.",
+  "id": 28
+}

@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "$1.261 Billion Negative Impact to Net Income",
+      "met": false
+    },
+    {
+      "criterion": "10.7% decrease in Net Income",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer's headline result is a $1.56B (13.2%) hit to net income, which conflicts with the expected $1.261B (10.7%). Its sensitivity table has a 21% statutory-rate case of $1.271B (10.8%), which is close to the expected answer. But the answer calls that case the least likely, so it doesn't count as stating the expected result.",
+  "id": 32
+}

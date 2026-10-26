@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "FY 2022: $160.44",
+      "met": true
+    },
+    {
+      "criterion": "FY 2023: $163.51",
+      "met": true
+    },
+    {
+      "criterion": "FY 2024: $166.23",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "All three yearly values exactly match the expected answer; no conflicting figures.",
+  "id": 21
+}

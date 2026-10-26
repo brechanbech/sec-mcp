@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Stock-Based Compensation Expense: $1.935B",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer names stock-based compensation expense as the largest adjustment at $1,935M (about $1.94B), which matches the expected answer. The extra items it lists, including the alternative reading of the question, don't conflict with the expected answer.",
+  "id": 34
+}

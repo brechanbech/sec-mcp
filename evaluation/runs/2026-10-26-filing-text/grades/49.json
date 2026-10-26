@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "Q1 2024: $2,861 million (1.9% BEAT)",
+      "met": false
+    },
+    {
+      "criterion": "Q2 2024: $3,101 million (2.6% BEAT)",
+      "met": true
+    },
+    {
+      "criterion": "Q3 2024: $3,657 million (2.0% BEAT)",
+      "met": true
+    },
+    {
+      "criterion": "Q4 2024: $4,140 million (2.2% BEAT)",
+      "met": true
+    },
+    {
+      "criterion": "Average beat of 2.2% over the last 4 quarters",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": true,
+  "grade": "wrong",
+  "reason": "The answer covers Q2'24 through Q1'25, but the expected window is Q1'24 through Q4'24. Its Q2, Q3 and Q4 2024 actuals ($3,101M, $3,657M, $4,140M) and beat percentages (2.6%, 2.0%, 2.2%) match the expected answer. It leaves out Q1 2024 and adds Q1 2025 (4.1% beat). Because of that, it gives a 2.8% average beat over the last 4 quarters, which conflicts with the expected 2.2%. That conflicting average, together with the shifted period, counts as a contradiction.",
+  "id": 49
+}

@@ -1,0 +1,41 @@
+{
+  "criteria": [
+    {
+      "criterion": "Thomas Carley",
+      "met": true
+    },
+    {
+      "criterion": "Joseph Clabby",
+      "met": true
+    },
+    {
+      "criterion": "Thomas Cusick",
+      "met": true
+    },
+    {
+      "criterion": "Gary Kramer",
+      "met": true
+    },
+    {
+      "criterion": "Anthony Meeker",
+      "met": true
+    },
+    {
+      "criterion": "Carla Moradi",
+      "met": true
+    },
+    {
+      "criterion": "Alexandra Morehouse",
+      "met": true
+    },
+    {
+      "criterion": "Vincent Price",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer names all eight expected nominees for 2024. The extra details, such as the Vice Chairman appointment, do not conflict with the expected answer.",
+  "id": 4
+}

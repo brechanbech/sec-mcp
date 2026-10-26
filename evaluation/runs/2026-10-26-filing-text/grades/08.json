@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "140 basis points beat on Q3 2024 GAAP gross margin guidance",
+      "met": true
+    },
+    {
+      "criterion": "140bps BEAT (contradiction check)",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives a beat of about 140 bps against the guidance midpoint (26.9% vs 25.5%), which matches the expected answer. The note that the result came in below the top of the range adds context and doesn't conflict with it.",
+  "id": 8
+}

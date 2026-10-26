@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "Class A: 432,876,657 shares",
+      "met": false
+    },
+    {
+      "criterion": "Class B: 188,462,942 shares",
+      "met": false
+    },
+    {
+      "criterion": "Class C: 0",
+      "met": true
+    },
+    {
+      "criterion": "Class H: 9,200,000 shares",
+      "met": true
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": true,
+  "grade": "wrong",
+  "reason": "The Class C (0) and Class H (9,200,000) figures match the expected answer. The Class A and Class B counts do not: the answer gives 431,602,213 and 185,610,542 shares, against 432,876,657 and 188,462,942 expected. These come from the April 18, 2025 cover page, which looks like a different reporting date from the one the expected answer uses. Conflicting share counts are a contradiction, so the grade is wrong.",
+  "id": 10
+}

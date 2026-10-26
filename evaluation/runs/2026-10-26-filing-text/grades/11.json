@@ -1,0 +1,49 @@
+{
+  "criteria": [
+    {
+      "criterion": "Q1 2025 guidance (USD): $25.0B to $25.4B",
+      "met": false
+    },
+    {
+      "criterion": "Q1 2025 guidance (NT$ at 32.9): 833,120",
+      "met": false
+    },
+    {
+      "criterion": "February to March revenue growth rate 2022: 17.0%",
+      "met": false
+    },
+    {
+      "criterion": "February to March revenue growth rate 2023: 10.9%",
+      "met": false
+    },
+    {
+      "criterion": "February to March revenue growth rate 2024: 7.5%",
+      "met": false
+    },
+    {
+      "criterion": "Average February to March growth rate: 4.5%",
+      "met": false
+    },
+    {
+      "criterion": "February 2025 revenue (NT$): 260,009",
+      "met": false
+    },
+    {
+      "criterion": "March 2025 revenue (estimate, NT$): 271,810",
+      "met": false
+    },
+    {
+      "criterion": "Q1 2025 estimate: 825,107",
+      "met": false
+    },
+    {
+      "criterion": "Q1 2025: -1.0% Miss",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": true,
+  "grade": "wrong",
+  "reason": "The expected answer projects Q1 2025 revenue from February-to-March seasonality and concludes a 1.0% miss against guidance of NT$833,120M. The answer instead uses Q2 2025 guidance (US$28.4–29.2B) and applies a ratio of Q2 revenue to March revenue. It also treats actual March 2025 revenue (NT$285,957M) as an input rather than estimating it. It concludes a small beat (+0.4%), which is the opposite direction from the expected miss. No rubric figures appear in the answer, and it uses a different fiscal period.",
+  "id": 11
+}

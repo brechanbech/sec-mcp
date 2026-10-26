@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "Effective Tax Rate 2023: 6.8%",
+      "met": true
+    },
+    {
+      "criterion": "Effective Tax Rate 2024: 10.9%",
+      "met": true
+    },
+    {
+      "criterion": "Delta: increased 410bps",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives FY2024 at 10.9%, FY2023 at 6.8% and the delta as +410bps, which matches all three criteria. The extra figures it adds, such as the tax expense numbers, don't conflict with the expected answer.",
+  "id": 19
+}

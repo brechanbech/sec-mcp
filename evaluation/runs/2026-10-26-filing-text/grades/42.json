@@ -1,0 +1,45 @@
+{
+  "criteria": [
+    {
+      "criterion": "Take rate 2023: 27.04%",
+      "met": true
+    },
+    {
+      "criterion": "Take rate 2024: 27.02%",
+      "met": true
+    },
+    {
+      "criterion": "Take rate was virtually flat from 2023 to 2024",
+      "met": true
+    },
+    {
+      "criterion": "Overall revenue growth was 18%",
+      "met": true
+    },
+    {
+      "criterion": "Gross bookings growth YoY: 18%",
+      "met": true
+    },
+    {
+      "criterion": "Mobility segment growth: 25%",
+      "met": false
+    },
+    {
+      "criterion": "Delivery segment growth: 17%",
+      "met": false
+    },
+    {
+      "criterion": "Freight segment growth: 2%",
+      "met": false
+    },
+    {
+      "criterion": "All growth in revenue was driven by volume, not take rate increases",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer gives the correct take rates (27.04% and 27.02%), says the take rate was flat, and gives 18% growth for both revenue and Gross Bookings. It also concludes that volume drove all of the growth. However, it leaves out the segment Gross Bookings growth figures (Mobility 25%, Delivery 17%, Freight 2%). The adjusted underlying take rate of about 28% is clearly labeled as the answer's own illustrative estimate, so it doesn't contradict the expected answer.",
+  "id": 42
+}

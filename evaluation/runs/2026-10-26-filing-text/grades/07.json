@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "$3.25 Billion",
+      "met": true
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer mentions $3.25 billion, but only as a base amount. It adds a $50 million purchase price adjustment and gives the total consideration as \"roughly $3.3 billion.\" That total conflicts with the expected total of $3.25 billion. It also says no value measured at closing was disclosed, which conflicts with the expected answer.",
+  "id": 7
+}

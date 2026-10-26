@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "0.7926 shares of Rocket Companies class A stock per share of Redfin",
+      "met": true
+    },
+    {
+      "criterion": "equity value of $1.75 billion",
+      "met": true
+    },
+    {
+      "criterion": "enterprise value of $2.4 billion",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives the 0.7926 exchange ratio, the $1.75B equity value and the $2.4B enterprise value. The $12.50 implied price per share and the 63% premium are extra details that fit the exchange ratio, so they don't conflict with the expected answer.",
+  "id": 35
+}

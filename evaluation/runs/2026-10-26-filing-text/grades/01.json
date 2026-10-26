@@ -1,0 +1,45 @@
+{
+  "criteria": [
+    {
+      "criterion": "2019: 10.82",
+      "met": true
+    },
+    {
+      "criterion": "2020: 10.91",
+      "met": true
+    },
+    {
+      "criterion": "2021: 11.67",
+      "met": true
+    },
+    {
+      "criterion": "2022: 11.76",
+      "met": true
+    },
+    {
+      "criterion": "2023: 11.64",
+      "met": true
+    },
+    {
+      "criterion": "2024: 11.70",
+      "met": true
+    },
+    {
+      "criterion": "From 2019-2022, ARM increased approximately 2.8% annually",
+      "met": false
+    },
+    {
+      "criterion": "From 2022 to 2024, ARM roughly flat",
+      "met": true
+    },
+    {
+      "criterion": "Flat 2022-2024 likely due to lower priced ad plans",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "All six yearly ARM figures match the expected answer. The answer also says ARM stayed between $11.64 and $11.76 from 2022 to 2024, which meets the \"roughly flat\" criterion. It does not give the roughly 2.8% annual growth for 2019–2022. Its ~1.6% a year covers 2019–2024, a different span, so it is not a contradiction. It also does not credit the flat period to the lower-priced ad plans.",
+  "id": 1
+}

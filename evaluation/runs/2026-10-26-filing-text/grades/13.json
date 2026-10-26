@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "2024 FCF margin: 12.7%",
+      "met": true
+    },
+    {
+      "criterion": "2023 FCF margin: 11.3%",
+      "met": true
+    },
+    {
+      "criterion": "2022 FCF margin: 24.8%",
+      "met": false
+    },
+    {
+      "criterion": "FCF margin has declined substantially since 2022",
+      "met": false
+    },
+    {
+      "criterion": "FCF margin settled into low teens percent in 2023 and 2024",
+      "met": true
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The 2024 (12.7%) and 2023 (11.3%) figures match, and the answer describes a low-double-digit level. But it puts the 2022 FCF margin at about 224% ($4,389M FCF on $1,958M revenue), which conflicts with the expected 24.8%. It also calls 2022 distorted and says the real trend is the improvement from 2023 to 2024, not the substantial decline from 2022 that the expected answer describes. The conflicting 2022 figure is a contradiction, so the grade is wrong.",
+  "id": 13
+}

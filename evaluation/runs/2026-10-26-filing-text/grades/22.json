@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Production expected to begin in 2025",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer quotes the 10-K directly: \"with production expected to begin in 2025,\" which matches the expected answer. It adds a later update that production started in Q2 of fiscal 2025. That fits with the 2025 expectation, since Smucker states years in fiscal terms, so it is not a contradiction.",
+  "id": 22
+}

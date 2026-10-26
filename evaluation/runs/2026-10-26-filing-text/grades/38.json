@@ -1,0 +1,33 @@
+{
+  "criteria": [
+    {
+      "criterion": "Quarterly guidance includes Total Revenue YoY Growth",
+      "met": true
+    },
+    {
+      "criterion": "Quarterly guidance includes Operating Margin",
+      "met": true
+    },
+    {
+      "criterion": "Quarterly guidance includes Earnings Per Share",
+      "met": true
+    },
+    {
+      "criterion": "Full FY guidance includes Earnings per Share YoY Growth",
+      "met": true
+    },
+    {
+      "criterion": "Full FY guidance includes Free Cash Flow",
+      "met": true
+    },
+    {
+      "criterion": "Full FY guidance includes Gross Leverage",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer names all three quarterly metrics (revenue YoY growth, operating margin, EPS) and all three full-year metrics (EPS growth, FCF, gross leverage). The extra details, such as non-fuel CASM commentary, do not conflict with the expected answer.",
+  "id": 38
+}

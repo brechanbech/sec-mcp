@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "20% of customers were derived from channel partners",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 20% for channel partners in fiscal 2024, which is the expected figure. It describes the 20% as a share of revenue, not of customer count, and says the customer-count split isn't disclosed. This matches the disclosure the expected answer appears to be based on. The figure, the period and the attribution to channel partners all agree with the expected answer, and nothing in the answer conflicts with it.",
+  "id": 33
+}

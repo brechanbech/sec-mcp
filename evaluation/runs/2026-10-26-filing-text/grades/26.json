@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "$500 million of Series A 6.500% Fixed-to-Floating Rate Junior Subordinated Debentures",
+      "met": true
+    },
+    {
+      "criterion": "Scheduled maturity date: May 15, 2057",
+      "met": true
+    },
+    {
+      "criterion": "Final maturity date: May 15, 2067",
+      "met": true
+    },
+    {
+      "criterion": "Redeemable on or after May 15, 2037 at principal amount plus accrued and unpaid interest",
+      "met": true
+    },
+    {
+      "criterion": "Redeemable prior to May 15, 2037 at principal amount plus accrued and unpaid interest or make-whole price",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "All five rubric facts are stated accurately for December 31, 2024. The extra details on interest, deferral and the RCC do not conflict with the expected answer.",
+  "id": 26
+}

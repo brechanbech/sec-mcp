@@ -1,0 +1,53 @@
+{
+  "criteria": [
+    {
+      "criterion": "Offering: 51,750,000 shares ($2,587,500,000 aggregate liquidation preference) with over-allotment option of 6,750,000 shares ($337,500,000)",
+      "met": true
+    },
+    {
+      "criterion": "Closing/Settlement Date: March 7, 2025",
+      "met": true
+    },
+    {
+      "criterion": "Price: $50.00 per share",
+      "met": true
+    },
+    {
+      "criterion": "Liquidation Preference: $50.00 per share plus accumulated and unpaid dividends",
+      "met": true
+    },
+    {
+      "criterion": "Dividend: 6.25% per annum, payable quarterly Mar/Jun/Sep/Dec 1 from Jun 1, 2025 to Mar 1, 2028",
+      "met": true
+    },
+    {
+      "criterion": "No dividends on KKR common stock so long as Series D remain outstanding",
+      "met": false
+    },
+    {
+      "criterion": "Mandatory Conversion: 0.3312-0.4140 shares on Mar 1, 2028 based on 20-day avg VWAP beginning 21st trading day prior",
+      "met": true
+    },
+    {
+      "criterion": "Optional Conversion: at any time prior to mandatory conversion date at minimum rate",
+      "met": true
+    },
+    {
+      "criterion": "Voting Rights: generally none, with exceptions such as nonpayment of dividends",
+      "met": true
+    },
+    {
+      "criterion": "Redemption: No optional redemption by KKR",
+      "met": false
+    },
+    {
+      "criterion": "Purpose: acquire additional equity in core PE portfolio companies and general corporate purposes",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer gets most terms right: size, closing date, price, liquidation preference, dividend terms, mandatory and optional conversion, voting rights and use of proceeds. It never mentions that KKR has no optional redemption right. It only says common dividends are blocked while Series D dividends are in arrears, not that they are barred for as long as the Series D is outstanding, so that criterion is not met. Nothing it says conflicts with the expected answer.",
+  "id": 15
+}

@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "45% (102,000/228,000) of Microsoft's full-time employees are located outside of the United States as of June 30, 2024.",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 102,000 / 228,000 = 44.7%. That rounds to the expected 45%, and the inputs and period (June 30, 2024) are the same, so nothing contradicts the expected answer.",
+  "id": 25
+}

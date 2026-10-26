@@ -1,0 +1,33 @@
+{
+  "criteria": [
+    {
+      "criterion": "Acquisition of Follow Up Boss for $399 million with up to $100 million in contingent consideration on December 8",
+      "met": true
+    },
+    {
+      "criterion": "Acquisition of Spruce for $19 million on September 11",
+      "met": true
+    },
+    {
+      "criterion": "Acquisition of Aryeo for $35 million on July 31",
+      "met": true
+    },
+    {
+      "criterion": "Decline in revenue related to Mortgages and Residential (Premier Agent) in post-COVID tight housing market",
+      "met": false
+    },
+    {
+      "criterion": "Acquisition strategy focused on subscription revenue platforms",
+      "met": true
+    },
+    {
+      "criterion": "Strategy to round out portfolio of home-buying services",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": true,
+  "grade": "partial",
+  "reason": "The answer gets all three acquisitions right, with the correct dates and amounts. It also describes the strategy as integrated software/SaaS tools that support the home-buying transaction. However, it misses the expected point that Mortgages and Residential revenue declined in the post-COVID housing market. Instead it uses the FY2024 10-K, which was filed in February 2025, after the question's 'as of December 2024' date, and reports that both categories grew. Because those figures cover a different period, this counts as a period mismatch rather than a direct contradiction, and the decline criterion is not met.",
+  "id": 45
+}

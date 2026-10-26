@@ -1,0 +1,37 @@
+{
+  "criteria": [
+    {
+      "criterion": "Provision for (benefit from) income taxes",
+      "met": true
+    },
+    {
+      "criterion": "Other income (expense), net",
+      "met": true
+    },
+    {
+      "criterion": "Interest income",
+      "met": true
+    },
+    {
+      "criterion": "Depreciation and amortization",
+      "met": true
+    },
+    {
+      "criterion": "Stock-based compensation expense",
+      "met": true
+    },
+    {
+      "criterion": "Acquisition-related impacts consisting of gains (losses) recognized on changes in the fair value of contingent consideration arrangements",
+      "met": true
+    },
+    {
+      "criterion": "Lodging taxes, withholding taxes, and transactional taxes with significant uncertainty on application to platform",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer names all seven expected adjustments: income taxes, other income (expense) net, interest income, depreciation and amortization, stock-based compensation, contingent-consideration acquisition impacts, and lodging, withholding and transactional taxes. Nothing in it conflicts with the expected answer. The extra reconciliation figures don't contradict anything.",
+  "id": 39
+}

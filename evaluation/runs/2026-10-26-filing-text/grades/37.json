@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Lyft's Q4'24 Adjusted EBITDA margin beat management guidance at midpoint in Q3'24 by 26.1bps",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer's headline is a beat of about 29 bps, using a 2.35% midpoint built from the guided margin range. That conflicts with the expected beat of 26.1 bps, which comes from the dollar guidance midpoint ($102.5M ÷ $4.315B ≈ 2.375%). The answer does mention about 26 bps, but only as one of several alternatives (29, 25 and 26 bps). It does not commit to that figure, so the stated answer contradicts the expected one. The beat direction and the periods are correct.",
+  "id": 37
+}

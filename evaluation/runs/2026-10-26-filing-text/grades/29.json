@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "85,945,127 shares if all converts were converted (including out of the money converts)",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 85,945 thousand (~85.9M) shares if all notes are converted at 12/31/2024. That matches 85,945,127 at the thousands precision the filing reports. It covers all notes, including the out-of-the-money ones, and nothing in it conflicts with the expected answer.",
+  "id": 29
+}

@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "Workday reports Gross Revenue Retention Rate",
+      "met": true
+    },
+    {
+      "criterion": "Definition: percentage of recurring revenue retained from existing customers",
+      "met": true
+    },
+    {
+      "criterion": "Calculation: compares ARR prior period-end to current period-end",
+      "met": true
+    },
+    {
+      "criterion": "Accounts for revenues lost to product or customer churn",
+      "met": true
+    },
+    {
+      "criterion": "Does not account for add-ons or net expansions",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer quotes the gross revenue retention rate definition word for word and meets every rubric element. The added details about net retention don't conflict with the expected answer.",
+  "id": 17
+}

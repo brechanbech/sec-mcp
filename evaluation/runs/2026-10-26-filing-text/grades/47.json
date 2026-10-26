@@ -1,0 +1,37 @@
+{
+  "criteria": [
+    {
+      "criterion": "In Force Premium (IFP): $944 Million, high end of guidance range",
+      "met": true
+    },
+    {
+      "criterion": "Gross Earned Premium (GEP): $827 Million, above high end of guidance range",
+      "met": true
+    },
+    {
+      "criterion": "Revenue: $526.5 Million, above high end of range",
+      "met": true
+    },
+    {
+      "criterion": "Adjusted EBITDA Loss: $(149.7) Million, above high end of range",
+      "met": true
+    },
+    {
+      "criterion": "Stock-based Compensation: $64.5 Million, above the expected $64 Million",
+      "met": true
+    },
+    {
+      "criterion": "Capital Expenditures: $9.4 Million, below the expected $10 million",
+      "met": false
+    },
+    {
+      "criterion": "Weighted Common Shares: 71 Million, right on target",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "Six of the seven criteria are met. The answer gives the correct figures and guidance comparisons for IFP, GEP, revenue, adjusted EBITDA loss, SBC ($64.5M against roughly $64M guided) and weighted shares (71M). It marks capital expenditures as \"Not checked\", so the $9.4M figure, below the expected $10M, is missing. Leaving it out is an omission, not a contradiction.",
+  "id": 47
+}

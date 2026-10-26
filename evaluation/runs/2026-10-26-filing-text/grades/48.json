@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "General Mills beat Adjusted Diluted EPS guidance in 2023",
+      "met": false
+    },
+    {
+      "criterion": "General Mills beat Adjusted Diluted EPS guidance midpoint in 2024",
+      "met": true
+    },
+    {
+      "criterion": "General Mills beat Adjusted Diluted EPS guidance twice in the past 2 years",
+      "met": false
+    },
+    {
+      "criterion": "2025 Adjusted Diluted EPS guidance: $4.47 - $4.57",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer confirms a fiscal 2024 beat ($4.52 against guidance of 4% to 6% growth from $4.30). It says it could not check fiscal 2023, so it never confirms the 2023 beat or the count of two. It gives the first fiscal 2025 guidance as -1% to +1% from $4.52, which works out to $4.47–$4.57, and adds later cuts. None of this is a direct conflict: the 2023 gap is an omission, and the later cuts are added detail.",
+  "id": 48
+}

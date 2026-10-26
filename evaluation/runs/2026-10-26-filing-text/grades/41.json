@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "KDP: 0.83",
+      "met": false
+    },
+    {
+      "criterion": "KO: 0.79",
+      "met": true
+    },
+    {
+      "criterion": "PEP: 0.75",
+      "met": false
+    },
+    {
+      "criterion": "KHC: 0.70",
+      "met": false
+    },
+    {
+      "criterion": "SJM: 0.59",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The KO figure matches: about 78.9%, which rounds to 0.79. The answer's other figures conflict with the expected answer. It gives KDP about 84.8% where 0.83 is expected, and PEP about 76.7% where 0.75 is expected. These are different figures, not rounding differences. It also leaves out KHC and SJM entirely. Because stated figures conflict, this counts as a contradiction, so the grade is wrong.",
+  "id": 41
+}

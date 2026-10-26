@@ -370,6 +370,12 @@ Most failures are item 2 as expected. It also found two bugs cheaper than item
   Six responses of 94k–181k characters exceeded Claude Code's tool-output limit
   and were lost to the agent.
 
+Both fixed in 0.7.0. **After item 2, 26 October 2026**
+([`evaluation/runs/2026-10-26-filing-text/`](../evaluation/runs/2026-10-26-filing-text/notes.md)):
+31 of 50 correct (62%), class-balanced 52.9%, and none unanswered. Paired with
+the baseline, 20 questions were fixed and none broken. The remaining wrong
+answers are choices of method or period, not tool failures.
+
 ## Explicitly rejected
 
 **Bulk ZIP archives.** SEC offers `companyfacts.zip` and `submissions.zip`

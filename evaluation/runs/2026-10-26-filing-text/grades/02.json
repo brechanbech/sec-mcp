@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "80bps beat from low end",
+      "met": true
+    },
+    {
+      "criterion": "70bps beat from high end",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer says TJX beat guidance by 80 bps from the low end (10.8%) and by 70 bps from the high end (10.9%), with an actual margin of 11.6%. Both match the expected answer, and nothing in it conflicts.",
+  "id": 2
+}

@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "AMZN FY 2025 capital expenditure guidance: $105.2 billion",
+      "met": false
+    },
+    {
+      "criterion": "GOOG FY 2025 capital expenditure guidance: $75.0 billion",
+      "met": false
+    },
+    {
+      "criterion": "META FY 2025 capital expenditure guidance: $62.5 billion",
+      "met": false
+    },
+    {
+      "criterion": "AMZN plans to spend the most on capital expenditures in 2025",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer correctly says Amazon will spend the most on capex in 2025. It gives no 2025 guidance figure for Amazon ($105.2B) or Alphabet ($75.0B), and says those numbers weren't found. For Meta, it cites the later, raised $64–72B guidance and mentions the earlier $60–65B outlook, but never states the $62.5B midpoint. I treated this as a newer version of the guidance rather than a contradiction. The ranking matches the expected answer.",
+  "id": 5
+}

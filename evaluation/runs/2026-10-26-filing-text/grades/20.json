@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "Shift4's merchant processing activity in North America is facilitated by one vendor.",
+      "met": true
+    },
+    {
+      "criterion": "The Company believes that this vendor maintains appropriate backup systems and alternative arrangements to avoid a significant disruption of the processing in the event of an unforeseen event.",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer quotes the Concentration Risk note almost word for word: one vendor handles merchant processing in North America, and management believes that vendor maintains appropriate backup systems and alternative arrangements. It also adds detail from the risk factors, including the \"no assurance\" caveat and the EU dependence. These additions sit alongside the expected answer and do not conflict with it. The period is FY2024, as the question asks.",
+  "id": 20
+}

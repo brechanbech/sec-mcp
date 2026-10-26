@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "2022 - 13.3%",
+      "met": true
+    },
+    {
+      "criterion": "2023 - 13.5%",
+      "met": true
+    },
+    {
+      "criterion": "2024 - 13.6%",
+      "met": true
+    },
+    {
+      "criterion": "ABNB incrementally increased its take rate year over year from 2022 to 2024",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 13.3%, 13.5% and 13.6% for FY2022–2024, which matches the expected answer. It also says the rate \"went up each year\", which matches the expected trend. Describing 2024 as \"held at about 13.5–13.6%\" still describes a small increase, so it doesn't conflict with the expected answer.",
+  "id": 16
+}

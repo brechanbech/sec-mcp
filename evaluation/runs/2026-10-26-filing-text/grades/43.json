@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Asia Pacific - 3.3 Nights per Booking",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 3.3 nights per booking for Asia Pacific in 2024, which matches the expected answer. The extra context about other regions doesn't conflict with the expected answer.",
+  "id": 43
+}

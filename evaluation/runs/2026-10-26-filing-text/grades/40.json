@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "FND same-store sales growth in Q4 2024 is -0.8%",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives Q4 FY2024 comparable store sales as down 0.8%, which matches the expected -0.8%. None of the other figures conflict with the expected answer.",
+  "id": 40
+}
