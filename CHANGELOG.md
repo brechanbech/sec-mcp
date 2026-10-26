@@ -8,6 +8,8 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-26
+
 ### Added
 - **`sec_filing_text` reads the text of filings and exhibits.** Until now every
   tool returned structured XBRL or a URL. The prose was out of reach: guidance
@@ -31,6 +33,9 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   - **Dependency.** It adds html5ever's tokenizer: 10 crates, all pure Rust.
   - **Design.** The design and the prototype measurements are in
     `docs/filing-text-design.md`.
+  - **Measured.** On the benchmark's 50 public questions it raised correct
+    answers from 11 to 31, with none of the 11 lost
+    (`evaluation/runs/2026-10-26-filing-text/`).
 
 ## [0.7.0] - 2026-10-26
 
