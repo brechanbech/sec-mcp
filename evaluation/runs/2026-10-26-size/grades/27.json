@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "$14,426,266,000",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the total 2025 material cash requirements, so it does not give the expected $14,426,266,000. It does give one component, content obligations of $11.42B. That figure is labeled as a part of the total, not the total itself, so it does not conflict with the expected answer. No criterion is met.",
+  "id": 27
+}

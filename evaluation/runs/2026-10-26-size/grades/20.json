@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "Shift4's merchant processing activity in North America is facilitated by one vendor.",
+      "met": false
+    },
+    {
+      "criterion": "The Company believes that this vendor maintains appropriate backup systems and alternative arrangements to avoid a significant disruption of the processing in the event of an unforeseen event.",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find what the filing says about vendor concentration. It does not state the single North America processing vendor or the backup-systems belief.",
+  "id": 20
+}

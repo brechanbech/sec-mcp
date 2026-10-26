@@ -1,0 +1,8 @@
+{
+  "model": "claude-opus-5-5",
+  "started": "2026-10-26T02:33:53Z",
+  "commit": "0b8673f",
+  "sec_mcp": "0.6.2",
+  "dataset_sha256": "bb33b8dbf21cf4b4981011057bdbf043cc90ebc1ae1f562b4f680dfacff89b3d",
+  "cutoff": "2025-05-16"
+}

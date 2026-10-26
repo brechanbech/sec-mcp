@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "85,945,127 shares if all converts were converted (including out of the money converts)",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says the figure was not found and gives no share count. It meets no criterion and doesn't contradict the expected answer.",
+  "id": 29
+}

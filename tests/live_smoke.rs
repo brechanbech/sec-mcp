@@ -220,10 +220,31 @@ fn live_smoke() {
             .contains("apple"),
         "company facts entity: {facts}"
     );
-    let usgaap = &facts["taxonomies"]["us-gaap"];
+    let concepts = facts["concepts"].as_array().expect("concepts array");
     assert!(
-        usgaap.as_array().is_some_and(|a| !a.is_empty()),
-        "expected non-empty us-gaap concepts: {facts}"
+        concepts.iter().any(|c| c["taxonomy"] == "us-gaap"),
+        "expected us-gaap concepts: {facts}"
+    );
+
+    // Paged and slim: the unfiltered listing ran to 181k characters for Netflix,
+    // past what a client will pass on. A default page stays well under that.
+    let nflx = server.call_tool("sec_company_facts", json!({ "ticker": "NFLX" }));
+    let size = nflx.to_string().len();
+    assert!(size < 40_000, "NFLX facts page is {size} characters");
+    assert!(
+        nflx["next_offset"].is_number(),
+        "NFLX has more than one page: matched {}",
+        nflx["matched"]
+    );
+    let revenue = server.call_tool(
+        "sec_company_facts",
+        json!({ "ticker": "NFLX", "query": "revenue" }),
+    );
+    assert!(
+        revenue["concepts"]
+            .as_array()
+            .is_some_and(|a| !a.is_empty() && a.iter().all(|c| c["latest"].is_string())),
+        "revenue concepts with a latest date: {revenue}"
     );
 
     // Recent filings, filtered to 10-K: the column-major block zips into rows.
@@ -350,6 +371,17 @@ fn live_smoke() {
         "every transaction needs a code: {first}"
     );
 
+    // Paging back: `next_offset` continues with older filings, not the same ones.
+    assert_eq!(insider["next_offset"], json!(2), "{insider}");
+    let older_insider = server.call_tool(
+        "sec_insider_transactions",
+        json!({ "ticker": "AAPL", "form_type": "4", "limit": 2, "offset": 2 }),
+    );
+    assert_ne!(
+        older_insider["filings"][0]["accession"], first["accession"],
+        "offset 2 repeated the first filing: {older_insider}"
+    );
+
     // Form 3 reports holdings, not transactions. An empty `transactions` array
     // must not mean an empty result — the same silent-empty failure fixed in
     // the period filter. A new officer who owns nothing yet legitimately files
@@ -399,6 +431,13 @@ fn live_smoke() {
     assert!(
         assets["data"].as_array().is_some_and(|a| !a.is_empty()),
         "instant frame returned no rows: {assets}"
+    );
+    // Thousands of filers report Assets; the page says so and pages on.
+    assert!(
+        assets["total"].as_u64().is_some_and(|t| t > 5) && assets["next_offset"] == json!(5),
+        "frame paging fields: total {} next_offset {}",
+        assets["total"],
+        assets["next_offset"]
     );
 
     // Full-text search. This is the one endpoint sec-mcp calls that SEC does not

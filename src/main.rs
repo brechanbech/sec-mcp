@@ -511,6 +511,25 @@ struct CompanyFactsParams {
     #[serde(default)]
     #[schemars(with = "String", extend("default" = "us-gaap"))]
     taxonomy: Option<String>,
+    /// Optional filter: match against concept name or label (case-insensitive
+    /// substring), e.g. 'revenue', 'lease', 'OperatingActivities'
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    query: Option<String>,
+    /// Number of concepts to return (default 100, max 300)
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 100))]
+    limit: Option<u64>,
+    /// Number of matching concepts to skip, for paging (default 0). Pass the
+    /// previous response's 'next_offset'.
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
+    /// Include each concept's full XBRL description (default false). They run
+    /// to hundreds of characters each, so narrow with 'query' first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool", extend("default" = false))]
+    include_descriptions: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -518,10 +537,15 @@ struct InsiderTransactionsParams {
     /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
     /// current ticker (delisted, acquired or renamed)
     ticker: String,
-    /// Number of insider filings to read (default 5, max 20). Each filing is one insider's report.
+    /// Number of insider filings to read (default 5, max 10). Each filing is one insider's report.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "u64", extend("default" = 5))]
     limit: Option<u64>,
+    /// Number of most-recent matching filings to skip, for paging back (default
+    /// 0). Pass the previous response's 'next_offset'.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
     /// Optional filter: '4' (changes in ownership — the usual choice), '3' (initial ownership, holdings only) or '5' (annual catch-up). Omit for all three.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String", extend("enum" = ["3", "4", "5"]))]
@@ -546,10 +570,15 @@ struct XbrlFramesParams {
     #[serde(default)]
     #[schemars(with = "String", extend("default" = "USD"))]
     unit: Option<String>,
-    /// Number of top entries to return (default 20)
+    /// Number of entries to return, largest value first (default 20, max 300)
     #[serde(default)]
     #[schemars(with = "u64", extend("default" = 20))]
     limit: Option<u64>,
+    /// Number of entries to skip, for paging down the ranking (default 0). Pass
+    /// the previous response's 'next_offset'.
+    #[serde(default)]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
 }
 
 // ── Ownership forms (3/4/5) ───────────────────────────────────────────────────
@@ -745,6 +774,67 @@ fn parse_ownership_document(xml: &str) -> Result<Value> {
 fn split_hit_id(id: &str) -> Option<(&str, &str)> {
     id.split_once(':')
         .filter(|(accession, document)| !accession.is_empty() && !document.is_empty())
+}
+
+/// One row per concept in a `companyfacts` response, for `sec_company_facts`.
+///
+/// The raw response nests every fact under every concept, and the full XBRL
+/// descriptions alone run to hundreds of characters each: Netflix's listing was
+/// 181k characters, past what an MCP client will hand a model. So the row
+/// carries the name, the short label and `latest`, the most recent period end
+/// with data, which separates a concept still in use from one the company
+/// stopped tagging years ago (Palantir has no `Revenues`, only
+/// `RevenueFromContractWithCustomerExcludingAssessedTax`). Descriptions come
+/// only on request. Rows sort by taxonomy, then concept, so paging is stable.
+fn concept_rows(
+    data: &Value,
+    taxonomy: Option<&str>,
+    query: Option<&str>,
+    descriptions: bool,
+) -> Vec<Value> {
+    let mut rows = Vec::new();
+    let Some(facts) = data["facts"].as_object() else {
+        return rows;
+    };
+    for (tax_name, concepts) in facts {
+        if taxonomy.is_some_and(|t| t != tax_name) {
+            continue;
+        }
+        let Some(concepts) = concepts.as_object() else {
+            continue;
+        };
+        for (name, concept) in concepts {
+            let label = concept["label"].as_str().unwrap_or(name);
+            if let Some(q) = query {
+                if !name.to_lowercase().contains(q) && !label.to_lowercase().contains(q) {
+                    continue;
+                }
+            }
+            let latest = concept["units"]
+                .as_object()
+                .into_iter()
+                .flat_map(|units| units.values())
+                .filter_map(Value::as_array)
+                .flatten()
+                .filter_map(|fact| fact["end"].as_str())
+                .max();
+            let mut row = json!({
+                "taxonomy": tax_name,
+                "concept": name,
+                "label": label,
+                "latest": latest,
+            });
+            if descriptions {
+                row["description"] = concept["description"].clone();
+            }
+            rows.push(row);
+        }
+    }
+    rows.sort_by(|a, b| {
+        (a["taxonomy"].as_str(), a["concept"].as_str())
+            .cmp(&(b["taxonomy"].as_str(), b["concept"].as_str()))
+    });
+    rows
 }
 
 /// The company a tool's `ticker` argument named.
@@ -1421,45 +1511,36 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .as_str()
                 .context("ticker required")?
                 .to_string();
-            let taxonomy_filter = args["taxonomy"].as_str().map(|s| s.to_string());
+            let taxonomy_filter = args["taxonomy"].as_str();
+            let query = args["query"]
+                .as_str()
+                .map(|q| q.trim().to_lowercase())
+                .filter(|q| !q.is_empty());
+            let limit = args["limit"].as_u64().unwrap_or(100).clamp(1, 300) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+            let descriptions = args["include_descriptions"].as_bool().unwrap_or(false);
             let company = client.resolve_company(&ticker).await?;
             let cik = company.cik.clone();
             let data = client.company_facts(&cik).await?;
 
             let entity = data["entityName"].as_str().unwrap_or("Unknown").to_string();
-            let facts = data["facts"].as_object();
+            let matches = concept_rows(&data, taxonomy_filter, query.as_deref(), descriptions);
+            let page: Vec<Value> = matches.iter().skip(offset).take(limit).cloned().collect();
 
-            let mut taxonomies = json!({});
-
-            if let Some(facts_map) = facts {
-                for (tax_name, concepts_val) in facts_map {
-                    if let Some(ref filter) = taxonomy_filter {
-                        if tax_name != filter {
-                            continue;
-                        }
-                    }
-                    if let Some(concepts) = concepts_val.as_object() {
-                        let concept_list: Vec<Value> = concepts
-                            .iter()
-                            .map(|(concept_name, concept_data)| {
-                                json!({
-                                    "concept": concept_name,
-                                    "label": concept_data["label"].as_str().unwrap_or(concept_name),
-                                    "description": concept_data["description"].as_str().unwrap_or(""),
-                                })
-                            })
-                            .collect();
-                        taxonomies[tax_name] = json!(concept_list);
-                    }
-                }
-            }
-
-            Ok(json!({
+            let mut out = json!({
                 "company": entity,
                 "ticker": company.ticker,
                 "cik": cik,
-                "taxonomies": taxonomies
-            }))
+                "matched": matches.len(),
+                "returned": page.len(),
+                "offset": offset,
+                "concepts": page,
+            });
+            let next_offset = offset + page.len();
+            if !page.is_empty() && next_offset < matches.len() {
+                out["next_offset"] = json!(next_offset);
+            }
+            Ok(out)
         }
 
         "sec_xbrl_frames" => {
@@ -1480,7 +1561,11 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let instant = args["instant"].as_bool().unwrap_or(false);
             let taxonomy = args["taxonomy"].as_str().unwrap_or("us-gaap").to_string();
             let unit = args["unit"].as_str().unwrap_or("USD").to_string();
-            let limit = args["limit"].as_u64().unwrap_or(20) as usize;
+            // A frame lists every filer reporting the concept, thousands for a
+            // common one, at ~150 characters a row. The cap keeps a page inside
+            // what a client will pass on; `offset` reaches further down.
+            let limit = args["limit"].as_u64().unwrap_or(20).clamp(1, 300) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
 
             if instant && !period_input.contains('Q') {
                 anyhow::bail!(
@@ -1506,17 +1591,25 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 vb.partial_cmp(&va).unwrap_or(std::cmp::Ordering::Equal)
             });
 
-            let top: Vec<Value> = entries.into_iter().take(limit).collect();
+            let total = entries.len();
+            let top: Vec<Value> = entries.into_iter().skip(offset).take(limit).collect();
+            let next_offset = offset + top.len();
 
-            Ok(json!({
+            let mut out = json!({
                 "concept": concept,
                 "taxonomy": taxonomy,
                 "unit": unit,
                 "period": period_code,
                 "instant": instant,
+                "total": total,
                 "count": top.len(),
+                "offset": offset,
                 "data": top
-            }))
+            });
+            if next_offset > offset && next_offset < total {
+                out["next_offset"] = json!(next_offset);
+            }
+            Ok(out)
         }
 
         "sec_insider_transactions" => {
@@ -1525,7 +1618,11 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .as_str()
                 .context("ticker required")?
                 .to_string();
-            let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, 20) as usize;
+            // Each parsed filing runs to several thousand characters with its
+            // footnotes; 20 Form 4s came to 114k, past what a client will pass
+            // on. Ten stays well inside, and `offset` reaches the rest.
+            let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, 10) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
             let form_filter = args["form_type"].as_str().map(|s| s.to_string());
 
             let company = client.resolve_company(&ticker).await?;
@@ -1549,30 +1646,38 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let docs = col("primaryDocument");
 
             let mut selected: Vec<(String, String, String, String)> = Vec::new();
+            let mut matched = 0;
+            let mut more = false;
             if let Some(forms) = col("form") {
                 for (i, f) in forms.iter().enumerate() {
-                    if selected.len() >= limit {
-                        break;
-                    }
                     let form = f.as_str().unwrap_or("");
                     // A bare form filter is exact; absent means all three.
                     let wanted = match form_filter.as_deref() {
                         Some(want) => form == want,
                         None => matches!(form, "3" | "4" | "5"),
                     };
-                    if wanted {
-                        selected.push((
-                            form.to_string(),
-                            cell(dates, i),
-                            cell(accs, i),
-                            cell(docs, i),
-                        ));
+                    if !wanted {
+                        continue;
                     }
+                    matched += 1;
+                    if matched <= offset {
+                        continue;
+                    }
+                    if selected.len() >= limit {
+                        more = true;
+                        break;
+                    }
+                    selected.push((
+                        form.to_string(),
+                        cell(dates, i),
+                        cell(accs, i),
+                        cell(docs, i),
+                    ));
                 }
             }
 
             // One request per filing, sequentially — SEC's fair-access limit is
-            // 10/sec and `limit` is capped at 20, so ordinary latency keeps us
+            // 10/sec and `limit` is capped at 10, so ordinary latency keeps us
             // well inside it.
             let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
             for (form, filed, accession, primary_document) in selected {
@@ -1606,13 +1711,19 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 }
             }
 
+            let next_offset = offset + filings.len();
+
             let mut result = json!({
                 "company": data["name"],
                 "ticker": company.ticker,
                 "cik": cik,
                 "returned": filings.len(),
+                "offset": offset,
                 "filings": filings,
             });
+            if more {
+                result["next_offset"] = json!(next_offset);
+            }
 
             if result["filings"].as_array().is_some_and(Vec::is_empty) {
                 result["note"] = json!(match form_filter.as_deref() {
@@ -1779,7 +1890,7 @@ impl SecMcp {
 
     #[tool(
         title = "Company XBRL Facts",
-        description = "Get all available XBRL financial facts for a company — useful for discovering what concepts (metrics) a company reports before querying specific values with sec_financial_concept.",
+        description = "List the XBRL concepts (metrics) a company reports, to find the right name before querying values with sec_financial_concept. Each row gives the concept, its label and 'latest', the most recent period end with data: prefer a concept that is still current, since companies change tags (Palantir reports revenue as RevenueFromContractWithCustomerExcludingAssessedTax, not Revenues). Narrow with 'query' (matches name or label, e.g. 'revenue' or 'lease'). Returns 100 by default; 'matched' says how many fit, and passing 'next_offset' back as 'offset' fetches the next page. Descriptions are left out unless include_descriptions is set.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_company_facts(
@@ -1791,7 +1902,7 @@ impl SecMcp {
 
     #[tool(
         title = "Insider Transactions",
-        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true.",
+        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true. Reads 5 filings by default and at most 10 per call; pass 'next_offset' back as 'offset' for older ones.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_insider_transactions(
@@ -1803,7 +1914,7 @@ impl SecMcp {
 
     #[tool(
         title = "Cross-Company XBRL Frames",
-        description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns top entries sorted by value. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
+        description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns entries sorted by value, largest first, 20 by default; 'total' says how many filers reported, and passing 'next_offset' back as 'offset' pages down the ranking. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_xbrl_frames(
@@ -1984,6 +2095,72 @@ mod tests {
         ] {
             assert_eq!(parse_cik(form).as_deref(), Some("0001163302"), "{form:?}");
         }
+    }
+
+    /// A `companyfacts` response trimmed to two taxonomies and three concepts,
+    /// in EDGAR's shape: facts nested by taxonomy, concept, then unit.
+    fn sample_company_facts() -> Value {
+        json!({
+            "entityName": "Example Corp",
+            "facts": {
+                "us-gaap": {
+                    "Revenues": {
+                        "label": "Revenues",
+                        "description": "Amount of revenue recognized...",
+                        "units": { "USD": [
+                            { "end": "2019-12-31", "val": 1 },
+                            { "end": "2020-12-31", "val": 2 }
+                        ] }
+                    },
+                    "RevenueFromContractWithCustomerExcludingAssessedTax": {
+                        "label": "Revenue from Contract with Customer, Excluding Assessed Tax",
+                        "description": "Amount, excluding tax collected from customer...",
+                        "units": { "USD": [
+                            { "end": "2024-12-31", "val": 3 },
+                            { "end": "2023-12-31", "val": 4 }
+                        ] }
+                    }
+                },
+                "dei": {
+                    "EntityCommonStockSharesOutstanding": {
+                        "label": "Entity Common Stock, Shares Outstanding",
+                        "description": "Number of shares...",
+                        "units": { "shares": [ { "end": "2025-01-31", "val": 5 } ] }
+                    }
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn concept_rows_are_slim_sorted_and_dated() {
+        let rows = concept_rows(&sample_company_facts(), None, None, false);
+        let names: Vec<&str> = rows.iter().filter_map(|r| r["concept"].as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "EntityCommonStockSharesOutstanding",
+                "RevenueFromContractWithCustomerExcludingAssessedTax",
+                "Revenues",
+            ],
+            "taxonomy, then concept"
+        );
+        // `latest` is the newest period end across all facts, whatever their order.
+        assert_eq!(rows[1]["latest"], "2024-12-31");
+        assert_eq!(rows[2]["latest"], "2020-12-31");
+        assert!(rows.iter().all(|r| r.get("description").is_none()));
+    }
+
+    #[test]
+    fn concept_rows_filter_by_taxonomy_and_query() {
+        let facts = sample_company_facts();
+        // The query matches the label as well as the name, ignoring case.
+        let revenue = concept_rows(&facts, Some("us-gaap"), Some("revenue"), true);
+        assert_eq!(revenue.len(), 2);
+        assert!(revenue.iter().all(|r| r["description"].is_string()));
+        let by_label = concept_rows(&facts, None, Some("excluding assessed"), false);
+        assert_eq!(by_label.len(), 1);
+        assert!(concept_rows(&facts, Some("ifrs-full"), None, false).is_empty());
     }
 
     #[test]

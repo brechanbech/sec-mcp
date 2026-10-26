@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "Purchase loan originations: $12,057,993 in thousands",
+      "met": false
+    },
+    {
+      "criterion": "Refinance loan originations: $5,250,321 in thousands",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says outright that it could not find the purchase vs. refinance split, so it gives neither expected figure. Instead it reports total additions to loans held for sale, about $17.03B, and labels this as a different metric (a proxy) that is not the requested split. That figure doesn't conflict with either expected component, so I don't count it as a contradiction. Because the answer declines the question and meets no criterion, the grade is no_answer.",
+  "id": 31
+}

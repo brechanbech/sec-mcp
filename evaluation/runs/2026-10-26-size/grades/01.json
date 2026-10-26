@@ -1,0 +1,45 @@
+{
+  "criteria": [
+    {
+      "criterion": "2019: 10.82",
+      "met": false
+    },
+    {
+      "criterion": "2020: 10.91",
+      "met": false
+    },
+    {
+      "criterion": "2021: 11.67",
+      "met": false
+    },
+    {
+      "criterion": "2022: 11.76",
+      "met": false
+    },
+    {
+      "criterion": "2023: 11.64",
+      "met": false
+    },
+    {
+      "criterion": "2024: 11.70",
+      "met": false
+    },
+    {
+      "criterion": "From 2019-2022, ARM increased approximately 2.8% annually",
+      "met": false
+    },
+    {
+      "criterion": "From 2022 to 2024, ARM roughly flat",
+      "met": false
+    },
+    {
+      "criterion": "Flat 2022-2024 likely due to lower priced ad plans",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the ARM figures and declines to estimate them. Instead it gives total revenue, which is a different metric and does not conflict with the expected ARM values. It meets no criterion.",
+  "id": 1
+}

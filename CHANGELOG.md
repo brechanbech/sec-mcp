@@ -19,6 +19,23 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   found now says to pass the CIK instead. The October 2026 Finance Agent
   Benchmark baseline lost four questions to this.
 
+### Changed
+- **`sec_company_facts` pages, filters and slims its listing.** It returned
+  every concept in every taxonomy with its full XBRL description: 181k
+  characters for Netflix, past what an MCP client will pass to a model, so the
+  benchmark baseline lost five calls to it. Each row is now the concept, its
+  label and `latest`, the most recent period end with data, which tells a
+  current concept from one the company stopped using. `query` filters by name
+  or label, `limit` (default 100, max 300) and `offset` page, and
+  `include_descriptions` brings the descriptions back. **The response shape
+  changed**: a flat `concepts` list with a `taxonomy` on each row replaces the
+  `taxonomies` object.
+- **`sec_insider_transactions` reads at most 10 filings per call** (was 20) and
+  pages back with `offset`/`next_offset`. Twenty Form 4s came to 114k
+  characters.
+- **`sec_xbrl_frames` caps `limit` at 300** (it had no cap) and pages with
+  `offset`/`next_offset`, reporting how many filers the frame holds in `total`.
+
 ## [0.6.2] - 2026-10-26
 
 ### Changed

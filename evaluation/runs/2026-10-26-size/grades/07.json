@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "$3.25 Billion",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives $3.25 billion as the value of the Endeavor asset deal, paid in TKO OpCo common units, and cites the closing 8-K and the Q1 2025 10-Q. It hedges by saying it couldn't confirm that this is the value measured at closing and that the closing value could differ. It never states a different figure, so there is no contradiction. The required figure is present, so the single correctness criterion is met.",
+  "id": 7
+}
