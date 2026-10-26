@@ -8,6 +8,8 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-26
+
 ### Added
 - **`sec_lookup_cik` finds filers by name.** A new `name` parameter, beside
   `ticker`, searches every entity EDGAR knows, not just those with a ticker.
