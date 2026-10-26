@@ -130,6 +130,36 @@ markup? extract sections? paginate?). That is the same problem README point 4
 already solves for JSON responses, but materially harder for prose. Do not start
 this without deciding the shaping strategy first.
 
+**The benchmark below makes this the largest gap (recorded 26 October 2026).**
+Of the 50 public Finance Agent Benchmark questions, a rough classification puts
+only about 10–12 within reach of the XBRL tools: revenue CAGR, inventory
+turnover, effective tax rate, lease maturities, free cash flow, payout ratios.
+The rest need prose:
+
+- **Guidance lives in 8-K exhibits.** The seven Beat or Miss questions, and
+  several modelling ones, compare a figure guided in one quarter's earnings
+  release (exhibit `EX-99.1`) with the actual in a later one. Reaching an
+  exhibit means walking `index.json`, not just fetching the primary document.
+- **Qualitative answers live in 10-K text**: the CFO, risk factors, a metric's
+  definition, a distribution centre's start date.
+- **Operating KPIs are not us-gaap facts.** Gross bookings, nights per booking,
+  ARPU and same-store sales sit in MD&A or the earnings release, not in XBRL
+  company facts.
+- **Some answers are in the proxy** (`DEF 14A`): director compensation.
+
+A shaping strategy that would serve those questions: take an accession (and
+optionally a document name), list the filing's documents from `index.json`,
+and return one document as plain text, paged by `offset`/`limit` like the other
+tools. For 10-K and 10-Q, also return a section index (Item 1A, Item 7, …) so a
+caller can jump rather than page. HTML-to-text needs a new dependency, and it
+should be pure Rust, consistent with the crate's no-build-time-C stance beyond
+`ring`.
+
+Precedent: edgar-audit-mcp (Python, a 12-tool server) ships
+`sec_edgar_read_filing_text`, and it is what lets its tool-only arm answer the
+qualitative and Beat or Miss questions. Here it would be one new tool, fed by
+the accessions `sec_recent_filings` and `sec_full_text_search` already return.
+
 ## 3. Insider transactions (Forms 3/4/5) — **done**
 
 Shipped as `sec_insider_transactions` (30 July 2026). The XML-parser cost noted
@@ -261,6 +291,54 @@ were confirmed as XML against live October 2026 filings.
 already. 13D/13G is the most valuable of the three: it is the only free,
 structured answer to "who holds more than 5% of this company", the question
 item 4 cannot answer.
+
+## Measuring: the Finance Agent Benchmark (recorded 26 October 2026)
+
+Not a capability: a yardstick for the ones above, and the evidence that ranks
+item 2 first.
+
+[Vals AI Finance Agent Benchmark](https://huggingface.co/datasets/vals-ai/finance_agent_benchmark),
+CC BY 4.0. It has 537 expert-written questions over SEC filings, of which **50
+are public**. Each public row carries the question, the expected answer, its
+category (nine, from Quantitative Retrieval to Financial Modeling), an expert
+time estimate, and a **rubric**: `correctness` criteria the answer must contain
+and a `contradiction` check. The questions were written against filings as of
+the dataset's publication, 16 May 2025.
+
+**What others have reported, and how far it carries.** The authors' paper
+([arXiv 2508.00828](https://arxiv.org/abs/2508.00828)) reports o3 best at 46.8%
+on the full 537, with web search and an EDGAR tool. edgar-audit-mcp reports 90%
+with its tools against 26% with none, on the public 50, graded by its own LLM
+judge. Its write-up (`evaluation/benchmark.md` in that repo) is candid that this
+is not comparable to the paper. The figure that holds up there is the paired
+one: 32 questions fixed by the tools, none broken. That proves tools help;
+it does not place a server on a leaderboard.
+
+**Plan: run it twice, before and after item 2.** Run it before as a baseline,
+then after, so the measurement isolates what filing text adds:
+
+1. **Answering arm**: headless `claude -p`, allowed only sec-mcp's tools (no
+   web search, no fetch), a budget of about eight tool calls per question, and
+   "not found with these tools" an accepted answer.
+2. **Point in time.** Instruct a cutoff of **2025-05-16**: use only filings
+   filed on or before it. edgar-audit-mcp's first run lost five answers to
+   "most recent" having drifted fifteen months past the questions, and fixed it
+   with an `as_of` parameter. Instruction first; a parameter only if the run
+   shows the instruction leaking, and then on filing date, not period end,
+   since a restatement shares the original's period. Audit afterwards: every
+   accession the arm cites must predate the cutoff.
+3. **Grading against the dataset's own rubric**, not a free-form judge: each
+   `correctness` criterion met or not, plus the `contradiction` check. That is
+   closer to the paper's method and checkable per question.
+4. **Report** raw and class-balanced accuracy (the paper's metric), with the
+   Wilson interval: on n = 50 it is wide, 79–96% around a 90% score. Publish the
+   raw answers and grades beside the number.
+
+**Cost**: 50 questions × up to eight calls each, well inside EDGAR's rate limit
+when run sequentially, plus one grading pass. **Attribution**: CC BY requires
+crediting Vals AI wherever results are published. **Expectation for the
+baseline**: low, and mostly a measure of item 2's absence. That is the point
+of running it first.
 
 ## Explicitly rejected
 
