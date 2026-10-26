@@ -36,6 +36,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 mod filing_text;
+mod schedule13;
 
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 const TICKER_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
@@ -682,6 +683,31 @@ struct InsiderTransactionsParams {
     /// Optional filter: '4' (changes in ownership — the usual choice), '3' (initial ownership, holdings only) or '5' (annual catch-up). Omit for all three.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String", extend("enum" = ["3", "4", "5"]))]
+    form_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct BeneficialOwnershipParams {
+    /// The company whose 5%-plus holders you want: a ticker, e.g. AAPL, or a CIK.
+    /// Or a holder's CIK (find it with sec_lookup_cik's 'name'), for the
+    /// schedules that holder has filed on other companies.
+    ticker: String,
+    /// Number of filings to read (default 5, max 10). Each filing is one holder's
+    /// (or one group's) report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 5))]
+    limit: Option<u64>,
+    /// Number of most-recent matching filings to skip, for paging back (default
+    /// 0). Pass the previous response's 'next_offset'.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
+    /// Optional filter: '13D' (holders who may seek to influence control, with
+    /// their stated purpose) or '13G' (passive and institutional holders). Omit
+    /// for both. Amendments are always included: they are how a holder reports
+    /// a change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String", extend("enum" = ["13D", "13G"]))]
     form_type: Option<String>,
 }
 
@@ -1974,6 +2000,162 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             Ok(result)
         }
 
+        "sec_beneficial_ownership" => {
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            // A 13D with six joint filers and a long Item 4 runs to about 12k
+            // characters, so the Form 4 page sizes hold here too.
+            let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, 10) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+            let want = match args["form_type"].as_str().map(str::trim) {
+                None | Some("") => None,
+                Some(f) if f.eq_ignore_ascii_case("13D") => Some(schedule13::Schedule::D),
+                Some(f) if f.eq_ignore_ascii_case("13G") => Some(schedule13::Schedule::G),
+                Some(other) => anyhow::bail!("form_type must be '13D' or '13G', not '{other}'"),
+            };
+
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
+            let data = client.recent_filings(&cik).await?;
+            let cik_num = cik.trim_start_matches('0').to_string();
+
+            // Schedules are indexed under the subject company and under each
+            // filer, so one listing answers both "who holds X" and "what does
+            // holder Y hold".
+            let block = &data["filings"]["recent"];
+            let col = |key: &str| block[key].as_array();
+            let cell = |arr: Option<&Vec<Value>>, i: usize| {
+                arr.and_then(|a| a.get(i))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string()
+            };
+            let dates = col("filingDate");
+            let accs = col("accessionNumber");
+            let docs = col("primaryDocument");
+
+            let mut selected = Vec::new();
+            let mut matched = 0;
+            let mut more = false;
+            if let Some(forms) = col("form") {
+                for (i, f) in forms.iter().enumerate() {
+                    let form = f.as_str().unwrap_or("");
+                    let Some((schedule, structured)) = schedule13::classify_form(form) else {
+                        continue;
+                    };
+                    if want.is_some_and(|w| w != schedule) {
+                        continue;
+                    }
+                    matched += 1;
+                    if matched <= offset {
+                        continue;
+                    }
+                    if selected.len() >= limit {
+                        more = true;
+                        break;
+                    }
+                    selected.push((
+                        form.to_string(),
+                        schedule,
+                        structured,
+                        cell(dates, i),
+                        cell(accs, i),
+                        cell(docs, i),
+                    ));
+                }
+            }
+
+            let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
+            let mut unstructured = false;
+            for (form, schedule, structured, filed, accession, primary_document) in selected {
+                if !structured {
+                    // HTML or text from before the XML schedules: listed, not
+                    // scraped, so sec_filing_text can read it.
+                    unstructured = true;
+                    let acc_nodash = accession.replace('-', "");
+                    filings.push(json!({
+                        "form": form,
+                        "schedule": schedule.label(),
+                        "filed": filed,
+                        "accession": accession,
+                        "url": format!(
+                            "https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{primary_document}"
+                        ),
+                        "structured": false,
+                    }));
+                    continue;
+                }
+                let url = ownership_xml_url(&cik_num, &accession, &primary_document);
+                let parsed = client
+                    .get_text(&url)
+                    .await
+                    .and_then(|xml| schedule13::parse(&xml));
+                match parsed {
+                    Ok(doc) => {
+                        let mut entry = json!({
+                            "form": form,
+                            "filed": filed,
+                            "accession": accession,
+                            "url": url,
+                        });
+                        if let (Some(entry), Some(doc)) = (entry.as_object_mut(), doc.as_object()) {
+                            entry.extend(doc.clone());
+                        }
+                        filings.push(entry);
+                    }
+                    // One unreadable document shouldn't lose the others.
+                    Err(e) => {
+                        debug!("could not read schedule {accession}: {e:#}");
+                        filings.push(json!({
+                            "form": form,
+                            "schedule": schedule.label(),
+                            "filed": filed,
+                            "accession": accession,
+                            "url": url,
+                            "error": format!("{e:#}"),
+                        }));
+                    }
+                }
+            }
+
+            let next_offset = offset + filings.len();
+            let mut result = json!({
+                "company": data["name"],
+                "ticker": company.ticker,
+                "cik": cik,
+                "returned": filings.len(),
+                "offset": offset,
+                "filings": filings,
+            });
+            if more {
+                result["next_offset"] = json!(next_offset);
+            }
+            if unstructured {
+                result["note"] = json!(
+                    "Filings with 'structured': false predate EDGAR's XML schedules \
+                     (18 December 2024) and are HTML or text: read one with sec_filing_text \
+                     and its 'url'."
+                );
+            }
+            if result["filings"].as_array().is_some_and(Vec::is_empty) {
+                result["note"] = json!(match want {
+                    Some(s) => format!(
+                        "No Schedule {} filings in this filer's recent submissions. \
+                         Omit form_type to look for 13D and 13G together.",
+                        s.label()
+                    ),
+                    None => "No Schedule 13D or 13G filings in this filer's recent submissions: \
+                             no holder has reported more than 5% recently, or, for a holder, \
+                             it has filed none."
+                        .to_string(),
+                });
+            }
+            Ok(result)
+        }
+
         "sec_filing_text" => {
             let client = state.read().await.client()?;
             let arg = |key: &str| args[key].as_str().map(str::trim).filter(|s| !s.is_empty());
@@ -2315,6 +2497,18 @@ impl SecMcp {
     }
 
     #[tool(
+        title = "Beneficial Ownership (13D/13G)",
+        description = "Who owns more than 5% of a company: Schedules 13D and 13G, read from the filings themselves. Pass the company's ticker or CIK for the holders that have reported on it, or a holder's CIK (from sec_lookup_cik with 'name') for the companies that holder has reported on. Returns filings newest first, each with every reporting person's name, type (investment adviser, individual, …), sole and shared voting and dispositive power, aggregate shares and percent of class. A 13G is the short form for passive and institutional holders: it says which rule it is filed under, and 'exit_five_percent_or_less' marks a holder dropping to 5% or less. A 13D is filed by holders who may seek to influence control, and carries 'purpose' (Item 4: plans for the company, such as board seats or a sale) and 'source_of_funds' (Item 3). A 13G holder switching to a 13D is a signal worth noting. Amendments (/A) are included, since they are how holders report changes, so the newest filing per holder is their current position. Joint filers in one filing usually report the same shares: do not add their counts together. Filings before 18 December 2024 are HTML or text, listed with 'structured': false and a URL for sec_filing_text. Reads 5 filings by default and at most 10 per call; pass 'next_offset' back as 'offset' for older ones.",
+        annotations(read_only_hint = true, open_world_hint = true)
+    )]
+    async fn sec_beneficial_ownership(
+        &self,
+        Parameters(params): Parameters<BeneficialOwnershipParams>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(self.call("sec_beneficial_ownership", &params).await)
+    }
+
+    #[tool(
         title = "Cross-Company XBRL Frames",
         description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns entries sorted by value, largest first, 20 by default; 'total' says how many filers reported, and passing 'next_offset' back as 'offset' pages down the ranking. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
         annotations(read_only_hint = true, open_world_hint = true)
@@ -2342,7 +2536,8 @@ impl ServerHandler for SecMcp {
         info.instructions = Some(
             "Tools for reading SEC EDGAR data: CIK lookup by ticker or name, recent filings, the text of \
              filings and their exhibits, full-text search, XBRL financial concepts and \
-             facts, insider transactions, company info, ticker listings, and \
+             facts, insider transactions, 5%-plus holders (Schedules 13D and 13G), \
+             company info, ticker listings, and \
              cross-company frames. \
              The SEC fair-access policy requires a contact email; if a tool reports that one \
              is not configured, ask the user for their address and call sec_configure. \
@@ -2829,7 +3024,7 @@ mod tests {
     #[test]
     fn every_tool_carries_a_title_and_behaviour_hints() {
         let tools = SecMcp::tool_router().list_all();
-        assert_eq!(tools.len(), 11);
+        assert_eq!(tools.len(), 12);
         for tool in &tools {
             let name = tool.name.as_ref();
             assert!(tool.title.is_some(), "{name} has no title");

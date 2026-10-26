@@ -7,7 +7,7 @@ committed work; the ordering reflects value-per-effort, not priority.
 Current scope is the four documented `data.sec.gov` APIs — submissions, XBRL
 company-concept, company-facts, and frames — plus the undocumented full-text
 search on `efts.sec.gov`, and ownership XML and filing documents from the Archives,
-surfaced as eleven tools. Verified
+surfaced as twelve tools. Verified
 against SEC's [EDGAR APIs page](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 on 29 July 2026: all four are current, none deprecated, no auth required, 10
 req/sec, `User-Agent` mandatory. EDGAR Next (mandatory filer enrolment since
@@ -301,18 +301,24 @@ were confirmed as XML against live October 2026 filings.
   been mandatory since 13 April 2023 (namespace `http://www.sec.gov/edgar/ownership`).
   It pairs with Forms 3/4/5, and a 144 often precedes a Form 4 sale, so it
   **could extend `sec_insider_transactions`** rather than add a tool.
-- **Schedules 13D and 13G**, holders above 5%. Structured XML has been
-  mandatory since 18 December 2024 (schema `X0202`, namespace
-  `http://www.sec.gov/edgar/schedule13g` for 13G). Exhibits stay
-  unstructured, and only filings from that date on are XML: older ones are
-  HTML or ASCII and should be reported as unreadable rather than scraped.
+- **Schedules 13D and 13G**, holders above 5%. **Done** (26 October 2026) as
+  `sec_beneficial_ownership`, a new tool rather than an extension of
+  `sec_insider_transactions`: the filers, schemas and questions all differ.
+  Structured XML has been mandatory since 18 December 2024 (schema `X0202`,
+  namespaces `http://www.sec.gov/edgar/schedule13D` and
+  `http://www.sec.gov/edgar/schedule13g`, forms `SCHEDULE 13D` and
+  `SCHEDULE 13G`). Older filings are `SC 13D` and `SC 13G`, in HTML or text.
+  They are listed with `structured: false` for `sec_filing_text` to read, not
+  scraped. Schedules are indexed under the subject company and each filer, so
+  the tool answers both "who holds X" and, given a holder's CIK from item 5,
+  "what does Y hold above 5%".
 - **Form D**, exempt offerings and private placements (schema `X0708`). Most
   issuers have no ticker, so this depends on item 5.
 
 **Effort: moderate per form**, but the parser and the `get_text` path exist
-already. 13D/13G is the most valuable of the three: it is the only free,
+already. 13D/13G was the most valuable of the three: it is the only free,
 structured answer to "who holds more than 5% of this company", the question
-item 4 cannot answer.
+item 4 cannot answer. Form 144 and Form D remain.
 
 ## Measuring: the Finance Agent Benchmark (recorded 26 October 2026)
 

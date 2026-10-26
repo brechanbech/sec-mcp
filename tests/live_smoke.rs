@@ -423,6 +423,34 @@ fn live_smoke() {
         );
     }
 
+    // Schedules 13D and 13G. Apple's holders file 13Gs: the newest is XML with
+    // a reporting person who owns a percentage of the class.
+    let holders = server.call_tool(
+        "sec_beneficial_ownership",
+        json!({ "ticker": "AAPL", "form_type": "13G", "limit": 3 }),
+    );
+    let first = &holders["filings"][0];
+    assert_eq!(first["schedule"], "13G", "AAPL 13G: {holders}");
+    assert_eq!(first["issuer"]["cik"], "0000320193", "{first}");
+    assert!(
+        first["reporting_persons"][0]["percent_of_class"].is_number(),
+        "a 13G reporting person has a percent of class: {first}"
+    );
+    // A 13D carries its purpose. Coliseum's August 2026 13D on Sonos replaced
+    // its 13G; read through the holder's own CIK, the other side of the index.
+    let coliseum = server.call_tool(
+        "sec_beneficial_ownership",
+        json!({ "ticker": "1409751", "form_type": "13D", "limit": 10 }),
+    );
+    let sonos = coliseum["filings"]
+        .as_array()
+        .and_then(|f| f.iter().find(|f| f["issuer"]["cik"] == "0001314727"))
+        .unwrap_or_else(|| panic!("Coliseum's 13D on Sonos: {coliseum}"));
+    assert!(
+        sonos["purpose"].as_str().is_some_and(|p| !p.is_empty()),
+        "a 13D carries Item 4: {sonos}"
+    );
+
     // Cross-company frame on a COMPOUND unit — the 0.4.2 regression guard. A
     // per-share concept must reach the API as `.../USD-per-shares/...`; the old
     // percent-encoded `USD%2Fshares` 404'd and this came back empty.
@@ -663,12 +691,13 @@ fn protocol_surface() {
     assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
 
     let tools = result["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 11, "expected 11 tools: {listed}");
+    assert_eq!(tools.len(), 12, "expected 12 tools: {listed}");
 
     // Named rather than merely counted: a count catches a tool vanishing but not
     // one being renamed, and the name is the part clients bind to.
     let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     for expected in [
+        "sec_beneficial_ownership",
         "sec_company_facts",
         "sec_company_info",
         "sec_configure",

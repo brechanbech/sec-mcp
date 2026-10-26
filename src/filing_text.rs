@@ -611,7 +611,8 @@ pub fn document_kind(name: &str) -> DocKind {
         "jpg" | "jpeg" | "gif" | "png" => DocKind::Unsupported("images carry no extractable text"),
         "xml" => DocKind::Unsupported(
             "XML is structured data, not prose: use sec_insider_transactions for Forms 3, 4 \
-             and 5, and the XBRL tools for financial data",
+             and 5, sec_beneficial_ownership for Schedules 13D and 13G, and the XBRL tools \
+             for financial data",
         ),
         "xsd" | "zip" | "json" | "xlsx" | "css" | "js" => {
             DocKind::Unsupported("this is a supporting file, not a document to read")

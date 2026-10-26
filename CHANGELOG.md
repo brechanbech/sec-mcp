@@ -22,6 +22,24 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
     not expand: "US Steel" finds Kobe Steel USA, while "United States Steel"
     finds CIK 1163302. People are filed surname first ("Buffett Warren").
   - **Tool title.** It is now "Look Up CIK", no longer "Look Up CIK by Ticker".
+- **`sec_beneficial_ownership` reads Schedules 13D and 13G**: who owns more
+  than 5% of a company. It is the only free, structured source for that
+  question; 13F holdings cannot answer it.
+  - **What it returns.** Filings newest first. Each gives every reporting
+    person's type in plain language (investment adviser, individual, …), sole
+    and shared voting and dispositive power, aggregate shares and percent of
+    class.
+  - **13G and 13D.** A 13G names the rule it is filed under (passive or
+    institutional holder) and flags a holder dropping to 5% or less. A 13D adds
+    the holder's stated purpose (Item 4) and source of funds (Item 3), capped
+    at 4,000 characters each.
+  - **Either direction.** Given a company, it lists the holders that have
+    reported on it. Given a holder's CIK, found with `sec_lookup_cik`'s `name`,
+    it lists the companies that holder has reported on.
+  - **Older filings.** Filings before 18 December 2024 are HTML or text. They
+    are listed with `structured: false` and a URL for `sec_filing_text`, not
+    scraped.
+  - **Tool count.** This takes sec-mcp to twelve tools.
 
 ## [0.8.0] - 2026-10-26
 
