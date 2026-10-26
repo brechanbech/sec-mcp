@@ -201,6 +201,31 @@ fn live_smoke() {
             .contains("steel"),
         "CIK 1163302 should be US Steel: {by_cik}"
     );
+
+    // A filer with no ticker is reachable by name, through EDGAR's undocumented
+    // company autocomplete. Bridgewater files 13Fs but has no ticker.
+    let by_name = server.call_tool(
+        "sec_lookup_cik",
+        json!({ "name": "Bridgewater Associates" }),
+    );
+    assert_eq!(
+        by_name["matches"][0]["cik"].as_str(),
+        Some("0001350694"),
+        "Bridgewater Associates, LP should rank first: {by_name}"
+    );
+    // A listed company's match carries its tickers, split out of the name.
+    let apple = server.call_tool("sec_lookup_cik", json!({ "name": "Apple" }));
+    assert_eq!(
+        apple["matches"][0]["cik"].as_str(),
+        Some("0000320193"),
+        "{apple}"
+    );
+    assert_eq!(apple["matches"][0]["tickers"], json!(["AAPL"]), "{apple}");
+    assert_eq!(
+        apple["matches"][0]["name"].as_str(),
+        Some("Apple Inc."),
+        "{apple}"
+    );
     let delisted = server.call_tool(
         "sec_financial_concept",
         json!({ "ticker": "1163302", "concept": "InventoryNet", "period": "annual", "limit": 1 }),

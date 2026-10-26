@@ -251,8 +251,8 @@ impl EdgarClient {
                 "ticker '{ident}' is not in SEC's list of current tickers. Delisted, \
                  acquired and renamed companies drop out of that list but stay in EDGAR: \
                  pass the company's CIK instead (sec_full_text_search hits and \
-                 sec_xbrl_frames rows carry one), or search current names with \
-                 sec_list_tickers."
+                 sec_xbrl_frames rows carry one), or find it by name with \
+                 sec_lookup_cik's 'name'."
             ),
         }
     }
@@ -313,6 +313,21 @@ impl EdgarClient {
         if from > 0 {
             url.push_str(&format!("&from={from}"));
         }
+        self.get_json(&url).await
+    }
+
+    /// Find filers by name: the autocomplete behind EDGAR's company search box.
+    ///
+    /// Undocumented, like [`Self::full_text_search`] on the same host, so
+    /// `live_smoke` asserts on its shape. It covers every entity EDGAR knows,
+    /// ticker or not (fund managers, private issuers, individual insiders),
+    /// ranks the results, and returns the top 10 with `hits.total` counting the
+    /// rest. Words match as prefixes and in any order.
+    async fn company_search(&self, name: &str) -> Result<Value> {
+        let url = format!(
+            "https://efts.sec.gov/LATEST/search-index?keysTyped={}",
+            urlencoding::encode(name)
+        );
         self.get_json(&url).await
     }
 
@@ -496,7 +511,15 @@ struct ConfigureParams {
 struct LookupCikParams {
     /// Stock ticker symbol, e.g. AAPL, MSFT, TSLA. A CIK (e.g. 1163302) is also
     /// accepted and returns that company's name and current tickers.
-    ticker: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    ticker: Option<String>,
+    /// Instead of 'ticker': a company, fund or person's name as filed with the
+    /// SEC, e.g. 'Bridgewater Associates' or 'Buffett Warren'. Searches every
+    /// EDGAR filer, with or without a ticker, and returns up to 10 ranked matches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -1031,6 +1054,34 @@ fn ticker_from_display_name(display_name: &str) -> Option<&str> {
         .filter(|ticker| !ticker.is_empty() && !ticker.contains(' '))
 }
 
+/// Project one company-autocomplete hit onto `{name, cik, tickers}`.
+///
+/// The index appends a filer's tickers to its name, `Apple Inc. (AAPL)`, and
+/// some legacy names carry runs of padding spaces; both are removed so `name`
+/// reads as filed. A hit whose `_id` is not a CIK is dropped rather than
+/// passed on as one.
+fn entity_match(hit: &Value) -> Option<Value> {
+    let cik: u64 = hit["_id"].as_str()?.parse().ok().filter(|&n| n > 0)?;
+    let source = &hit["_source"];
+    let mut name = source["entity"].as_str()?.trim();
+    let listed = source["tickers"].as_str().unwrap_or_default();
+    if !listed.is_empty() {
+        if let Some(bare) = name.strip_suffix(&format!(" ({listed})")) {
+            name = bare;
+        }
+    }
+    let tickers: Vec<&str> = listed
+        .split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    Some(json!({
+        "name": name.split_whitespace().collect::<Vec<_>>().join(" "),
+        "cik": format!("{cik:010}"),
+        "tickers": tickers,
+    }))
+}
+
 /// Project one raw full-text-search hit onto the shape the tool returns.
 ///
 /// The raw `_source` carries film numbers, file numbers, SIC codes, XSL paths
@@ -1299,7 +1350,38 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
         "sec_lookup_cik" => {
             let client = state.read().await.client()?;
-            let ticker = args["ticker"].as_str().context("ticker required")?;
+            let given = |key: &str| args[key].as_str().map(str::trim).filter(|s| !s.is_empty());
+            let ticker = match (given("ticker"), given("name")) {
+                (Some(_), Some(_)) => anyhow::bail!("pass 'ticker' or 'name', not both"),
+                (None, None) => anyhow::bail!(
+                    "pass 'ticker' (a ticker or CIK) or 'name' (a company, fund or person's name)"
+                ),
+                (Some(ticker), None) => ticker,
+                (None, Some(name)) => {
+                    let data = client.company_search(name).await?;
+                    let matches: Vec<Value> = data["hits"]["hits"]
+                        .as_array()
+                        .map(|hits| hits.iter().filter_map(entity_match).collect())
+                        .unwrap_or_default();
+                    let total = data["hits"]["total"]["value"]
+                        .as_u64()
+                        .unwrap_or(matches.len() as u64);
+                    let mut out = json!({ "query": name, "total": total, "matches": matches });
+                    if matches.is_empty() {
+                        out["note"] = json!(
+                            "No EDGAR filer matches. Names match word by word as filed, so \
+                             abbreviations do not expand: 'United States Steel', not 'US Steel'. \
+                             People are filed surname first, e.g. 'Buffett Warren'."
+                        );
+                    } else if total > matches.len() as u64 {
+                        out["note"] = json!(format!(
+                            "The top {} of {total} matches; add words to narrow the search.",
+                            matches.len()
+                        ));
+                    }
+                    return Ok(out);
+                }
+            };
             let company = client.resolve_company(ticker).await?;
             let cik = &company.cik;
             let mut out = json!({
@@ -2125,8 +2207,8 @@ impl SecMcp {
     }
 
     #[tool(
-        title = "Look Up CIK by Ticker",
-        description = "Look up the SEC CIK (Central Index Key) for a stock ticker. The ticker is matched exactly, ignoring case, against SEC's list of active tickers, which is fetched once and cached for an hour, so repeat lookups make no further SEC request. Returns one CIK, zero-padded to 10 digits, with a link to the company's EDGAR page; share classes such as GOOG and GOOGL map to the same CIK. An unknown ticker is an error, not a guess: use sec_list_tickers to search by company name. A delisted, acquired or renamed company is no longer in that list but is still in EDGAR, and every tool here accepts its CIK in place of a ticker. Given a CIK, this returns the company's name and current tickers, which confirms whose it is. The other tools take tickers directly, so call this only when you need the CIK itself.",
+        title = "Look Up CIK",
+        description = "Look up the SEC CIK (Central Index Key) by ticker or by name. With 'ticker', the ticker is matched exactly, ignoring case, against SEC's list of active tickers, which is fetched once and cached for an hour, so repeat lookups make no further SEC request. Returns one CIK, zero-padded to 10 digits, with a link to the company's EDGAR page; share classes such as GOOG and GOOGL map to the same CIK. An unknown ticker is an error, not a guess. Given a CIK as 'ticker', this returns the company's name and current tickers, which confirms whose it is. With 'name', this searches every EDGAR filer, including those with no ticker: fund managers such as Bridgewater, private issuers, delisted or acquired companies and individual insiders. It returns up to 10 ranked matches, each with name, CIK and any tickers. Words match as prefixes in any order, but abbreviations do not expand ('United States Steel', not 'US Steel'), and people are filed surname first ('Buffett Warren'). Every tool here accepts a CIK in place of a ticker, so a name match reaches a company's filings even without a ticker. The other tools take tickers directly, so call this only when you need the CIK itself or have only a name.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_lookup_cik(
@@ -2258,7 +2340,7 @@ impl ServerHandler for SecMcp {
         // `server/discover`.
         info.server_info = Implementation::new("sec-mcp", SERVER_VERSION);
         info.instructions = Some(
-            "Tools for reading SEC EDGAR data: CIK lookup, recent filings, the text of \
+            "Tools for reading SEC EDGAR data: CIK lookup by ticker or name, recent filings, the text of \
              filings and their exhibits, full-text search, XBRL financial concepts and \
              facts, insider transactions, company info, ticker listings, and \
              cross-company frames. \
@@ -2643,6 +2725,51 @@ mod tests {
         assert_eq!(newest_first_window(50, 50, 20), 0..0);
         assert_eq!(newest_first_window(50, 999, 20), 0..0);
         assert_eq!(newest_first_window(0, 0, 20), 0..0);
+    }
+
+    #[test]
+    fn an_entity_match_strips_the_appended_tickers() {
+        // Captured live on 26 October 2026 from `keysTyped=berkshire`.
+        let hit = json!({
+            "_id": "1067983",
+            "_source": {
+                "entity": "BERKSHIRE HATHAWAY INC (BRK-B, BRK-A)",
+                "tickers": "BRK-B, BRK-A",
+                "rank": 62_649_000
+            }
+        });
+        assert_eq!(
+            entity_match(&hit),
+            Some(json!({
+                "name": "BERKSHIRE HATHAWAY INC",
+                "cik": "0001067983",
+                "tickers": ["BRK-B", "BRK-A"]
+            }))
+        );
+    }
+
+    #[test]
+    fn an_entity_without_tickers_keeps_its_name_minus_padding() {
+        // A legacy name padded with spaces, from `keysTyped=united states steel`.
+        let hit = json!({
+            "_id": "1146318",
+            "_source": {
+                "entity": "UNITED STATES STEEL CORP /PA/                           /TA",
+                "rank": 933
+            }
+        });
+        let m = entity_match(&hit).expect("a match");
+        assert_eq!(m["name"], "UNITED STATES STEEL CORP /PA/ /TA");
+        assert_eq!(m["cik"], "0001146318");
+        assert_eq!(m["tickers"], json!([]));
+    }
+
+    #[test]
+    fn an_entity_hit_without_a_cik_is_dropped() {
+        for id in ["", "0", "abc", "0001067983-26-000001"] {
+            let hit = json!({ "_id": id, "_source": { "entity": "X" } });
+            assert_eq!(entity_match(&hit), None, "{id:?} is not a CIK");
+        }
     }
 
     #[test]

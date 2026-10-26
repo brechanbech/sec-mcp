@@ -225,12 +225,10 @@ obstacles are elsewhere, and two of the three sit outside the code:
    lookup by CIK. "Who holds AAPL?" — the question people actually want — means
    scanning every manager's filing, thousands per quarter. There is no
    holder-by-security index.
-2. **sec-mcp cannot identify most managers.** It is ticker-driven, and most
-   institutional managers have no ticker: `sec_lookup_cik("Bridgewater
-   Associates")` fails. Berkshire works only because it happens to be listed.
-   This needs a name→CIK path the server does not have (SEC's
-   `cik-lookup-data.txt` would serve, at the cost of another dataset to fetch
-   and cache).
+2. **sec-mcp could not identify most managers.** It was ticker-driven, and most
+   institutional managers have no ticker. Item 5 removed this obstacle on
+   26 October 2026: `sec_lookup_cik` with `name: "Bridgewater Associates"`
+   now returns its CIK.
 3. **Holdings are keyed by CUSIP, and CUSIP is licensed.** The table carries no
    ticker. CUSIP Global Services is operated by FactSet on behalf of the ABA, so
    there is no free SEC-published CUSIP→ticker crosswalk. Even "does Berkshire
@@ -238,7 +236,7 @@ obstacles are elsewhere, and two of the three sit outside the code:
 
 **If revisited, scope it honestly to the tractable half**: "what does manager X
 hold", taking a CIK, reporting issuer names as filed. That is a real capability,
-but a much smaller promise than "who holds this stock". Item 5 removes obstacle 2.
+but a much smaller promise than "who holds this stock". Item 5 has removed obstacle 2.
 
 ## Beyond the documented API (recorded 24 October 2026)
 
@@ -254,9 +252,15 @@ could.
 
 ## 5. Company name → CIK
 
-Every tool starts from a ticker, so filers without one are unreachable: most
+**Done** (26 October 2026): `sec_lookup_cik` takes a `name` beside `ticker`,
+backed by the EDGAR company autocomplete below. `name: "Bridgewater
+Associates"` returns CIK 1350694 first. Abbreviations do not expand ("US Steel"
+finds Kobe Steel USA, not CIK 1163302), and people are filed surname first;
+the tool description says both.
+
+Every tool started from a ticker, so filers without one were unreachable: most
 13F managers, private issuers filing Form D, funds, individual insiders.
-`sec_lookup_cik("Bridgewater Associates")` fails today. Two sources, both
+`sec_lookup_cik("Bridgewater Associates")` failed. Two sources, both
 verified 24 October 2026:
 
 - **`https://www.sec.gov/Archives/edgar/cik-lookup-data.txt`**: every EDGAR

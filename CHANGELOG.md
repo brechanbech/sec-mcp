@@ -8,6 +8,21 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- **`sec_lookup_cik` finds filers by name.** A new `name` parameter, beside
+  `ticker`, searches every entity EDGAR knows, not just those with a ticker.
+  That includes fund managers such as Bridgewater, private issuers, and
+  individual insiders. It returns up to 10 ranked matches, each with name, CIK
+  and any tickers. Every tool takes a CIK in place of a ticker, so a name match
+  reaches a filer's filings directly.
+  - **Source.** It uses the autocomplete behind EDGAR's company search box, on
+    `efts.sec.gov`. That endpoint is undocumented, like full-text search on the
+    same host, so the live suite asserts on it.
+  - **Matching.** Words match as prefixes in any order, but abbreviations do
+    not expand: "US Steel" finds Kobe Steel USA, while "United States Steel"
+    finds CIK 1163302. People are filed surname first ("Buffett Warren").
+  - **Tool title.** It is now "Look Up CIK", no longer "Look Up CIK by Ticker".
+
 ## [0.8.0] - 2026-10-26
 
 ### Added

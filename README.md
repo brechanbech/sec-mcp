@@ -59,6 +59,7 @@ On your first SEC-related request Claude will explain that a contact email is re
 - *"Show me Tesla's annual revenue for the last 5 years"*
 - *"What was Microsoft's net income last quarter?"*
 - *"What industry is NVDA in according to the SEC?"*
+- *"What is Bridgewater Associates' CIK, and what has it filed recently?"*
 - *"Show me Amazon's most recent 10-K filing"*
 - *"What tickers are listed on NYSE with 'energy' in the name?"*
 - *"What financial metrics does Apple report to the SEC?"*
@@ -71,7 +72,7 @@ On your first SEC-related request Claude will explain that a contact email is re
 | Tool | Description |
 |------|-------------|
 | `sec_configure` | First-run setup — saves your contact email |
-| `sec_lookup_cik` | Resolve a ticker symbol to its SEC CIK number |
+| `sec_lookup_cik` | Resolve a ticker to its SEC CIK number, or search every EDGAR filer by name: fund managers, private issuers and individuals with no ticker included |
 | `sec_company_info` | SIC code, industry, state of incorporation, fiscal year end, addresses |
 | `sec_recent_filings` | Recent filings (10-K, 10-Q, 8-K, etc.) with direct URLs — pages into older history automatically when a form-type filter needs it |
 | `sec_filing_text` | The text of a filing document or exhibit (10-K, 10-Q, 8-K, earnings release EX-99.1, proxy): its section index, any section by item, a search within it, or pages from any point. Given a filing, lists its documents by type |
@@ -84,8 +85,8 @@ On your first SEC-related request Claude will explain that a contact email is re
 
 Wherever a tool takes a ticker, it also takes a CIK (`1163302`, `0001163302` or
 `CIK0001163302`). SEC's ticker list holds only current tickers, so a company that
-was acquired, delisted or renamed is reachable only by CIK. Full-text search hits
-and frames rows carry one.
+was acquired, delisted or renamed is reachable only by CIK. `sec_lookup_cik` with
+`name` finds it, and full-text search hits and frames rows carry one.
 
 ## Amendments (`10-K/A` and friends)
 
