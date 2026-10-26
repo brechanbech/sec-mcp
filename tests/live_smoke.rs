@@ -285,6 +285,56 @@ fn live_smoke() {
         "first row form: {filings}"
     );
 
+    // Latest filings across EDGAR, from the undocumented latest-filings feed.
+    // A Form 4 is listed once per party, so grouping must give each filing both
+    // its reporting person and its issuer.
+    let latest = server.call_tool(
+        "sec_recent_filings",
+        json!({ "form_type": "4", "limit": 10 }),
+    );
+    let latest_rows = latest["filings"].as_array().expect("latest filings array");
+    assert_eq!(latest_rows.len(), 10, "ten latest Form 4s: {latest}");
+    assert!(
+        latest_rows.iter().all(|f| f["accession"].is_string()),
+        "every latest filing has an accession: {latest}"
+    );
+    assert!(
+        latest_rows.iter().any(|f| {
+            let roles: Vec<&str> = f["parties"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|p| p["role"].as_str())
+                .collect();
+            roles.contains(&"Reporting") && roles.contains(&"Issuer")
+        }),
+        "a Form 4 groups its reporting person and issuer: {latest}"
+    );
+
+    // Full-text search with no query lists filings by form and date, one per
+    // filing.
+    let listed = server.call_tool(
+        "sec_full_text_search",
+        json!({
+            "forms": "10-K",
+            "start_date": "2025-02-10",
+            "end_date": "2025-02-14",
+            "limit": 20
+        }),
+    );
+    let listed_rows = listed["results"].as_array().expect("results array");
+    let mut accessions: Vec<&str> = listed_rows
+        .iter()
+        .filter_map(|r| r["accession"].as_str())
+        .collect();
+    let returned = accessions.len();
+    accessions.sort_unstable();
+    accessions.dedup();
+    assert!(
+        returned == 20 && accessions.len() == returned,
+        "20 distinct 10-Ks filed 10–14 Feb 2025: {listed}"
+    );
+
     // Foreign private issuer — the 0.5.0 regression guard. XBRL is not
     // US-domestic-only: Novartis reports `ifrs-full` facts on 6-K, which the
     // old `form == "10-Q"` filter excluded, so `quarterly` came back empty and

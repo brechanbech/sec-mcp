@@ -8,6 +8,25 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- **Latest filings across EDGAR.** `sec_recent_filings` with no `ticker` now
+  answers questions that start from a time rather than a company: "which 8-Ks
+  were filed today", "any new 13D this morning".
+  - **Source.** It reads EDGAR's real-time latest-filings feed, filtered by
+    `form_type`. The feed reaches back about two business days, newest first,
+    and amendments match too.
+  - **What each row gives.** One filing, with its acceptance time and index
+    URL. It lists every party: a Form 4's reporting person and issuer, or a
+    13D's filers and subject company, each with CIK and role. For an 8-K it
+    also gives the items.
+  - **Paging.** `next_offset` pages further back.
+- **Filings by form and date, for any period.** `sec_full_text_search` no
+  longer requires a `query`. With `forms` or a date range alone, it lists
+  matching filings, one per filing and newest first, back to 2001: "every
+  Schedule 13D filed last week". A call with neither a query nor a filter is
+  refused rather than searching all of EDGAR.
+  - **No new tool.** Both extend existing tools, so sec-mcp stays at thirteen.
+
 ## [0.9.0] - 2026-10-26
 
 ### Added

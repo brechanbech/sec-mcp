@@ -279,7 +279,23 @@ The autocomplete is the better fit for interactive use. **It could extend
 `sec_lookup_cik`** (a `name` parameter beside `ticker`) rather than add a tool.
 **Effort: low.** It unblocks item 4 and the Form D half of item 7.
 
-## 6. Latest filings
+## 6. Latest filings — **done**
+
+**Done** (26 October 2026) without a new tool, against the note below. With
+thirteen tools the count mattered more than when this was written:
+
+- **`sec_recent_filings` with no `ticker`** reads the feed: real time, about
+  two business days deep (some 520 8-Ks), 100 entries a page. A filing with
+  several parties is one entry per party (Reporting/Issuer, Filed by/Subject),
+  so entries are grouped by accession. `type` matches amendments too. The body
+  declares ISO-8859-1 and the response names no charset, so it is decoded as
+  Latin-1 when it is not valid UTF-8.
+- **`sec_full_text_search` without a `query`** lists filings by form and date
+  for any range back to 2001. With no query EDGAR returns one hit per filing
+  (its primary document), newest first. That covers the past days the feed
+  does not, so the daily indexes were not needed.
+
+The original note:
 
 Every tool starts from a company. Nothing answers a question that starts from
 *time*: "which 8-Ks were filed today", "any new 13D this week".

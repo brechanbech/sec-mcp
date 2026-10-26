@@ -38,6 +38,7 @@ use tracing::{debug, error, info};
 mod filing_text;
 mod form144;
 mod form_d;
+mod latest;
 mod schedule13;
 mod xml;
 
@@ -95,6 +96,9 @@ struct EdgarClient {
 /// The most a filing document may be. The largest 10-Ks run to a few MB of
 /// HTML; this only stops a pathological document from exhausting memory.
 const DOCUMENT_CAP: usize = 25 * 1024 * 1024;
+
+/// Entries per request to the latest-filings feed: its largest page size.
+const LATEST_PAGE: usize = 100;
 
 /// A small least-recently-used cache. Filed documents never change, so entries
 /// need no expiry; the bound is on memory, where a 10-K's text is about 0.4 MB.
@@ -375,6 +379,24 @@ impl EdgarClient {
         Ok(body)
     }
 
+    /// One page of 100 entries from EDGAR's latest-filings feed, starting at
+    /// entry `start`. See [`latest`] for what the feed covers.
+    async fn current_filings(
+        &self,
+        form: Option<&str>,
+        start: usize,
+    ) -> Result<Vec<latest::Entry>> {
+        // `form` is model-controlled, so it is encoded rather than interpolated.
+        let url = format!(
+            "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type={}\
+             &owner=include&start={start}&count={LATEST_PAGE}&output=atom",
+            urlencoding::encode(form.unwrap_or_default())
+        );
+        // A full page is about 80 KB.
+        let body = self.get_capped(&url, 4 * 1024 * 1024).await?;
+        latest::parse(&latest::decode(body))
+    }
+
     /// A filing's SGML header: its form, dates, filer and document list.
     async fn filing_header(
         &self,
@@ -529,8 +551,11 @@ struct LookupCikParams {
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct RecentFilingsParams {
     /// Stock ticker, e.g. AAPL, or the company's CIK, e.g. 1163302, for one with no
-    /// current ticker (delisted, acquired or renamed)
-    ticker: String,
+    /// current ticker (delisted, acquired or renamed). Omit for the latest
+    /// filings across all of EDGAR.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    ticker: Option<String>,
     /// Optional filter: '10-K', '10-Q', '8-K', etc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String")]
@@ -539,13 +564,22 @@ struct RecentFilingsParams {
     #[serde(default)]
     #[schemars(with = "u64", extend("default" = 10))]
     limit: Option<u64>,
+    /// Latest filings across EDGAR only (no 'ticker'): the 'next_offset' from
+    /// the previous page, to page further back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct FullTextSearchParams {
     /// Words or phrase to find in filing text. Wrap in double quotes for an
     /// exact phrase: "climate transition plan". Unquoted terms match separately.
-    query: String,
+    /// Omit it, with 'forms' or a date range, to list filings by form and date,
+    /// one per filing, newest first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    query: Option<String>,
     /// Optional filter: '10-K', '8-K', or several comma-separated ('10-K,10-Q').
     /// Amendments are excluded unless requested: '10-K' returns original 10-Ks
     /// only, '10-K/A' returns amendments only, '10-K,10-K/A' returns both.
@@ -1327,6 +1361,70 @@ fn select_filings(
     (rows, false)
 }
 
+/// The latest filings across EDGAR, from its latest-filings feed, as one row
+/// per filing with its parties.
+///
+/// The feed pages by entry and a filing can span several entries, so whole
+/// pages are fetched until `limit` filings are complete. A filing cut off at
+/// the end of a page is not returned until the next page shows its last
+/// party, and `next_offset` counts entries, not filings.
+async fn latest_filings(
+    client: &EdgarClient,
+    form: Option<&str>,
+    limit: usize,
+    offset: usize,
+) -> Result<Value> {
+    let mut entries = Vec::new();
+    let mut exhausted = false;
+    // 40 filings of a dozen parties each is the worst case; three pages of
+    // 100 entries covers any ordinary mix, and the rest is a next_offset away.
+    for _ in 0..3 {
+        let page = client.current_filings(form, offset + entries.len()).await?;
+        let n = page.len();
+        entries.extend(page);
+        if n < LATEST_PAGE {
+            exhausted = true;
+            break;
+        }
+        if latest::group(&entries).len() > limit {
+            break;
+        }
+    }
+    let groups = latest::group(&entries);
+    let complete = if exhausted {
+        groups.len()
+    } else {
+        groups.len().saturating_sub(1)
+    };
+    let take = complete.min(limit);
+    let consumed: usize = groups[..take].iter().map(|(_, n)| n).sum();
+    let filings: Vec<Value> = groups.into_iter().take(take).map(|(f, _)| f).collect();
+
+    let mut out = json!({
+        "latest": true,
+        "form_type": form,
+        "returned": filings.len(),
+        "offset": offset,
+        "filings": filings,
+        "coverage": "EDGAR's latest-filings feed: real time, about the last two business \
+                     days. For older filings by form and date, use sec_full_text_search \
+                     with 'forms' and 'start_date'/'end_date' and no query.",
+    });
+    if !exhausted || take < complete {
+        out["next_offset"] = json!(offset + consumed);
+    }
+    if take == 0 {
+        out["note"] = json!(match form {
+            Some(f) => format!(
+                "No form {f} filings in the feed's window. The form must be EDGAR's own \
+                 name for it, e.g. '8-K', 'SCHEDULE 13D', '4'."
+            ),
+            None => "The feed returned no filings.".to_string(),
+        });
+    }
+    Ok(out)
+}
+
 // ── Tool handlers ─────────────────────────────────────────────────────────────
 
 /// Forms carrying a filer's *annual* figures.
@@ -1493,9 +1591,18 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
         "sec_full_text_search" => {
             let client = state.read().await.client()?;
-            let query = args["query"].as_str().context("query required")?.trim();
-            if query.is_empty() {
-                anyhow::bail!("query cannot be empty");
+            // With no query, EDGAR lists filings by the other filters alone, one
+            // hit per filing, newest first: "every 13D filed last week". With
+            // no filter either, it would be all of EDGAR.
+            let query = args["query"].as_str().unwrap_or_default().trim();
+            let filtered = ["forms", "ticker", "start_date", "end_date"]
+                .iter()
+                .any(|k| args[*k].as_str().is_some_and(|v| !v.trim().is_empty()));
+            if query.is_empty() && !filtered {
+                anyhow::bail!(
+                    "pass a 'query', or leave it out and filter by 'forms', 'ticker' or \
+                     'start_date'/'end_date' to list filings without searching their text"
+                );
             }
 
             // 100 is the endpoint's own page size, so a larger limit would
@@ -1591,12 +1698,21 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
 
         "sec_recent_filings" => {
             let client = state.read().await.client()?;
-            let ticker = args["ticker"]
+            let form_filter_owned = args["form_type"]
                 .as_str()
-                .context("ticker required")?
-                .to_string();
-            let form_filter_owned = args["form_type"].as_str().map(|s| s.to_string());
-            let limit = args["limit"].as_u64().unwrap_or(10).min(40) as usize;
+                .map(str::trim)
+                .filter(|f| !f.is_empty())
+                .map(str::to_string);
+            let limit = args["limit"].as_u64().unwrap_or(10).clamp(1, 40) as usize;
+            let Some(ticker) = args["ticker"]
+                .as_str()
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+            else {
+                let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+                return latest_filings(&client, form_filter_owned.as_deref(), limit, offset).await;
+            };
             let company = client.resolve_company(&ticker).await?;
             let cik = company.cik.clone();
             let data = client.recent_filings(&cik).await?;
@@ -2487,7 +2603,7 @@ impl SecMcp {
 
     #[tool(
         title = "Recent Filings",
-        description = "Get recent SEC filings (10-K, 10-Q, 8-K, etc.) for a company by ticker symbol. Returns the most recent filings first. When a form_type filter is given, older history is paged in automatically if recent filings don't satisfy the requested limit.",
+        description = "Get recent SEC filings (10-K, 10-Q, 8-K, etc.) for a company by ticker symbol, or, with no ticker, the latest filings across all of EDGAR. For a company: returns the most recent filings first; when a form_type filter is given, older history is paged in automatically if recent filings don't satisfy the requested limit. With no ticker: reads EDGAR's real-time latest-filings feed, which reaches back about two business days, newest first, filtered by form_type ('8-K', 'SCHEDULE 13D', '4'; amendments match too). Each row is one filing with its acceptance time, its parties (a Form 4's reporting person and issuer, a 13D's filers and subject company, each with CIK and role), an 8-K's items, and the filing's index URL for sec_filing_text. Pass 'next_offset' back as 'offset' for older pages. For filings by form further back than the feed reaches, use sec_full_text_search with 'forms' and a date range and no query.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_recent_filings(
@@ -2511,7 +2627,7 @@ impl SecMcp {
 
     #[tool(
         title = "Full-Text Filing Search",
-        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Optionally filter by form, ticker and date range; a form filter excludes amendments (e.g. '10-K/A') unless include_amendments is set, and any amendment returned is marked 'amendment': true. Each hit comes back with a direct URL to the matching document. To page, pass `next_offset` back as `offset` — filtering means a page can return fewer than `limit` hits. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`, and counts excluded amendments, flagged by `total_is_upper_bound` (or `total_is_approximate` when both apply).",
+        description = "Search the full text of SEC filings from 2001 onward, exhibits included — the one tool here that finds companies by what they SAID rather than needing the company up front (e.g. which filers discussed a climate transition plan). Wrap a phrase in double quotes inside the query for an exact match. Leave the query out, with a form filter or a date range, to list filings by form and date instead, one per filing, newest first: e.g. every Schedule 13D filed last week. Optionally filter by form, ticker and date range; a form filter excludes amendments (e.g. '10-K/A') unless include_amendments is set, and any amendment returned is marked 'amendment': true. Each hit comes back with a direct URL to the matching document. To page, pass `next_offset` back as `offset` — filtering means a page can return fewer than `limit` hits. Note the `total` saturates at 10000, flagged by `total_is_lower_bound`, and counts excluded amendments, flagged by `total_is_upper_bound` (or `total_is_approximate` when both apply).",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_full_text_search(
