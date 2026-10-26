@@ -7,7 +7,7 @@ committed work; the ordering reflects value-per-effort, not priority.
 Current scope is the four documented `data.sec.gov` APIs — submissions, XBRL
 company-concept, company-facts, and frames — plus the undocumented full-text
 search on `efts.sec.gov`, and ownership XML and filing documents from the Archives,
-surfaced as twelve tools. Verified
+surfaced as thirteen tools. Verified
 against SEC's [EDGAR APIs page](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 on 29 July 2026: all four are current, none deprecated, no auth required, 10
 req/sec, `User-Agent` mandatory. EDGAR Next (mandatory filer enrolment since
@@ -291,7 +291,7 @@ string. **Effort: low to moderate**: the Atom feed needs an XML parse, which
 `roxmltree` already provides. This is a genuinely new kind of question, so a new
 tool is justified here.
 
-## 7. More structured ownership and offering forms
+## 7. More structured ownership and offering forms — **done**
 
 The same pattern as `sec_insider_transactions`: find the filing through
 submissions or full-text search, then read its `primary_doc.xml`. All three
@@ -317,13 +317,19 @@ were confirmed as XML against live October 2026 filings.
   scraped. Schedules are indexed under the subject company and each filer, so
   the tool answers both "who holds X" and, given a holder's CIK from item 5,
   "what does Y hold above 5%".
-- **Form D**, exempt offerings and private placements (schema `X0708`). Most
-  issuers have no ticker, so this depends on item 5.
+- **Form D**, exempt offerings and private placements (schema `X0708`, no
+  namespace). **Done** (26 October 2026) as `sec_private_offerings`, a new
+  tool: the filer is the issuer itself, often a private company or fund, and
+  the question is money raised, which no other tool answers. Most issuers have
+  no ticker, so it is reached through item 5. Amendments are kept, since a
+  fund files a `D/A` every year with the running total sold. Every Form D on
+  EDGAR has been XML since 2009, so there is no older format to list.
 
 **Effort: moderate per form**, but the parser and the `get_text` path exist
 already. 13D/13G was the most valuable of the three: it is the only free,
 structured answer to "who holds more than 5% of this company", the question
-item 4 cannot answer. Form D remains.
+item 4 cannot answer. All three are done; with them sec-mcp has thirteen
+tools.
 
 ## Measuring: the Finance Agent Benchmark (recorded 26 October 2026)
 

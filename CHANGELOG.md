@@ -40,6 +40,20 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
     are listed with `structured: false` and a URL for `sec_filing_text`, not
     scraped.
   - **Tool count.** This takes sec-mcp to twelve tools.
+- **`sec_private_offerings` reads Form D**: money raised without a registered
+  offering, by private companies, funds and public companies. Most filers have
+  no ticker, so it is reached through `sec_lookup_cik`'s `name`.
+  - **What it returns.** Filings newest first. Each gives the issuer (entity
+    type, jurisdiction, state) and the industry group; for a fund, its type. It
+    also gives the revenue or net-asset range, the exemption claimed in plain
+    language (Rule 506(b), 506(c), Investment Company Act 3(c)(1) or 3(c)(7)),
+    and the date of first sale. Then the amounts offered, sold and remaining (a
+    fund's open-ended offering reads `Indefinite`) and the number of investors.
+    Last come the commissions and finder's fees, the brokers paid, and the
+    officers, directors and promoters named.
+  - **Amendments.** `D/A` filings are included: a fund files one every year,
+    with the running total sold.
+  - **Tool count.** This takes sec-mcp to thirteen tools.
 - **`sec_insider_transactions` reads Form 144** with `form_type: "144"`. A
   Form 144 is an insider's notice of a proposed sale, filed when the order is
   placed, before the Form 4 that reports the trade.

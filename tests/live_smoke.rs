@@ -436,6 +436,30 @@ fn live_smoke() {
         "a Form 144 names its seller and the shares to be sold: {notice}"
     );
 
+    // Form D. SpaceX raised privately for twenty years before listing, and its
+    // last Form D (August 2022) reports $250M sold under Rule 506(b). Taken by
+    // CIK, as most Form D filers have no ticker.
+    let spacex = server.call_tool(
+        "sec_private_offerings",
+        json!({ "ticker": "1181412", "limit": 1 }),
+    );
+    let offering = &spacex["filings"][0];
+    assert!(
+        offering["total_amount_sold"].is_number() && offering["exemptions"][0]["code"].is_string(),
+        "a Form D reports the amount sold and its exemption: {spacex}"
+    );
+    // A fund's offering is open-ended, and its type is reported.
+    let fund = server.call_tool(
+        "sec_private_offerings",
+        json!({ "ticker": "1507589", "limit": 1 }),
+    );
+    let fund_offering = &fund["filings"][0];
+    assert_eq!(
+        fund_offering["industry"], "Pooled Investment Fund",
+        "Bridgewater Pure Alpha Fund VI: {fund}"
+    );
+    assert!(fund_offering["fund"]["type"].is_string(), "{fund_offering}");
+
     // Schedules 13D and 13G. Apple's holders file 13Gs: the newest is XML with
     // a reporting person who owns a percentage of the class.
     let holders = server.call_tool(
@@ -704,7 +728,7 @@ fn protocol_surface() {
     assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
 
     let tools = result["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 12, "expected 12 tools: {listed}");
+    assert_eq!(tools.len(), 13, "expected 13 tools: {listed}");
 
     // Named rather than merely counted: a count catches a tool vanishing but not
     // one being renamed, and the name is the part clients bind to.
@@ -720,6 +744,7 @@ fn protocol_surface() {
         "sec_insider_transactions",
         "sec_list_tickers",
         "sec_lookup_cik",
+        "sec_private_offerings",
         "sec_recent_filings",
         "sec_xbrl_frames",
     ] {

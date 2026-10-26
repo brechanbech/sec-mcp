@@ -37,6 +37,7 @@ use tracing::{debug, error, info};
 
 mod filing_text;
 mod form144;
+mod form_d;
 mod schedule13;
 mod xml;
 
@@ -714,6 +715,23 @@ struct BeneficialOwnershipParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct PrivateOfferingsParams {
+    /// The issuer: a ticker, e.g. SPCX, or a CIK. Most Form D filers are private
+    /// companies and funds with no ticker; find their CIK with sec_lookup_cik's
+    /// 'name'.
+    ticker: String,
+    /// Number of filings to read (default 5, max 10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 5))]
+    limit: Option<u64>,
+    /// Number of most-recent filings to skip, for paging back (default 0). Pass
+    /// the previous response's 'next_offset'.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct XbrlFramesParams {
     /// XBRL concept name, e.g. 'Revenues', 'NetIncomeLoss', 'Assets'
     concept: String,
@@ -1263,6 +1281,50 @@ fn ownership_xml_url(cik_num: &str, accession: &str, primary_document: &str) -> 
         .filter(|(prefix, _)| prefix.starts_with("xsl"))
         .map_or(primary_document, |(_, name)| name);
     format!("https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{raw_doc}")
+}
+
+/// One filing from a submissions block, as the form readers need it.
+struct FilingRow {
+    form: String,
+    filed: String,
+    accession: String,
+    primary_document: String,
+}
+
+/// A page of the filings in `filings.recent` whose form `wanted` accepts,
+/// newest first: `offset` matches skipped, at most `limit` taken, and whether
+/// more matches remain. Shared by the tools that read one form family's
+/// documents (Forms 3/4/5 and 144, Schedules 13D/13G, Form D).
+fn select_filings(
+    data: &Value,
+    offset: usize,
+    limit: usize,
+    wanted: impl Fn(&str) -> bool,
+) -> (Vec<FilingRow>, bool) {
+    let block = &data["filings"]["recent"];
+    let cell = |key: &str, i: usize| block[key][i].as_str().unwrap_or_default().to_string();
+    let mut rows = Vec::new();
+    let mut matched = 0;
+    for (i, form) in block["form"].as_array().into_iter().flatten().enumerate() {
+        let form = form.as_str().unwrap_or_default();
+        if !wanted(form) {
+            continue;
+        }
+        matched += 1;
+        if matched <= offset {
+            continue;
+        }
+        if rows.len() >= limit {
+            return (rows, true);
+        }
+        rows.push(FilingRow {
+            form: form.to_string(),
+            filed: cell("filingDate", i),
+            accession: cell("accessionNumber", i),
+            primary_document: cell("primaryDocument", i),
+        });
+    }
+    (rows, false)
 }
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
@@ -1893,56 +1955,25 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let cik_num = cik.trim_start_matches('0').to_string();
 
             // Ownership forms are indexed under the *issuer* as well as the
-            // insider, so the company's own submissions carry them. Same
-            // column-major layout as `collect_filings` reads.
-            let block = &data["filings"]["recent"];
-            let col = |key: &str| block[key].as_array();
-            let cell = |arr: Option<&Vec<Value>>, i: usize| {
-                arr.and_then(|a| a.get(i))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string()
-            };
-            let dates = col("filingDate");
-            let accs = col("accessionNumber");
-            let docs = col("primaryDocument");
-
-            let mut selected: Vec<(String, String, String, String)> = Vec::new();
-            let mut matched = 0;
-            let mut more = false;
-            if let Some(forms) = col("form") {
-                for (i, f) in forms.iter().enumerate() {
-                    let form = f.as_str().unwrap_or("");
-                    // A bare form filter is exact; absent means all three.
-                    let wanted = match form_filter.as_deref() {
-                        Some(want) => form == want,
-                        None => matches!(form, "3" | "4" | "5"),
-                    };
-                    if !wanted {
-                        continue;
-                    }
-                    matched += 1;
-                    if matched <= offset {
-                        continue;
-                    }
-                    if selected.len() >= limit {
-                        more = true;
-                        break;
-                    }
-                    selected.push((
-                        form.to_string(),
-                        cell(dates, i),
-                        cell(accs, i),
-                        cell(docs, i),
-                    ));
-                }
-            }
+            // insider, so the company's own submissions carry them.
+            // A bare form filter is exact; absent means all three.
+            let (selected, more) =
+                select_filings(&data, offset, limit, |form| match form_filter.as_deref() {
+                    Some(want) => form == want,
+                    None => matches!(form, "3" | "4" | "5"),
+                });
 
             // One request per filing, sequentially — SEC's fair-access limit is
             // 10/sec and `limit` is capped at 10, so ordinary latency keeps us
             // well inside it.
             let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
-            for (form, filed, accession, primary_document) in selected {
+            for FilingRow {
+                form,
+                filed,
+                accession,
+                primary_document,
+            } in selected
+            {
                 let url = ownership_xml_url(&cik_num, &accession, &primary_document);
                 // Form 144 shares the ownership namespace but not the schema.
                 let parsed = client.get_text(&url).await.and_then(|xml| {
@@ -2031,52 +2062,23 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             // Schedules are indexed under the subject company and under each
             // filer, so one listing answers both "who holds X" and "what does
             // holder Y hold".
-            let block = &data["filings"]["recent"];
-            let col = |key: &str| block[key].as_array();
-            let cell = |arr: Option<&Vec<Value>>, i: usize| {
-                arr.and_then(|a| a.get(i))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string()
-            };
-            let dates = col("filingDate");
-            let accs = col("accessionNumber");
-            let docs = col("primaryDocument");
-
-            let mut selected = Vec::new();
-            let mut matched = 0;
-            let mut more = false;
-            if let Some(forms) = col("form") {
-                for (i, f) in forms.iter().enumerate() {
-                    let form = f.as_str().unwrap_or("");
-                    let Some((schedule, structured)) = schedule13::classify_form(form) else {
-                        continue;
-                    };
-                    if want.is_some_and(|w| w != schedule) {
-                        continue;
-                    }
-                    matched += 1;
-                    if matched <= offset {
-                        continue;
-                    }
-                    if selected.len() >= limit {
-                        more = true;
-                        break;
-                    }
-                    selected.push((
-                        form.to_string(),
-                        schedule,
-                        structured,
-                        cell(dates, i),
-                        cell(accs, i),
-                        cell(docs, i),
-                    ));
-                }
-            }
+            let (selected, more) = select_filings(&data, offset, limit, |form| {
+                schedule13::classify_form(form)
+                    .is_some_and(|(schedule, _)| want.is_none_or(|w| w == schedule))
+            });
 
             let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
             let mut unstructured = false;
-            for (form, schedule, structured, filed, accession, primary_document) in selected {
+            for FilingRow {
+                form,
+                filed,
+                accession,
+                primary_document,
+            } in selected
+            {
+                let Some((schedule, structured)) = schedule13::classify_form(&form) else {
+                    continue;
+                };
                 if !structured {
                     // HTML or text from before the XML schedules: listed, not
                     // scraped, so sec_filing_text can read it.
@@ -2158,6 +2160,83 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                              it has filed none."
                         .to_string(),
                 });
+            }
+            Ok(result)
+        }
+
+        "sec_private_offerings" => {
+            let client = state.read().await.client()?;
+            let ticker = args["ticker"]
+                .as_str()
+                .context("ticker required")?
+                .to_string();
+            // A Form D runs to about 2k characters, more with a long list of
+            // related persons; ten stay small.
+            let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, 10) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
+            let data = client.recent_filings(&cik).await?;
+            let cik_num = cik.trim_start_matches('0').to_string();
+
+            // Amendments are kept: a fund files a D/A every year, and it carries
+            // the running total sold.
+            let (selected, more) =
+                select_filings(&data, offset, limit, |form| matches!(form, "D" | "D/A"));
+
+            let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
+            for FilingRow {
+                form,
+                filed,
+                accession,
+                primary_document,
+            } in selected
+            {
+                let url = ownership_xml_url(&cik_num, &accession, &primary_document);
+                let mut entry = json!({
+                    "form": form,
+                    "filed": filed,
+                    "accession": accession,
+                    "url": url,
+                });
+                match client
+                    .get_text(&url)
+                    .await
+                    .and_then(|xml| form_d::parse(&xml))
+                {
+                    Ok(doc) => {
+                        if let (Some(entry), Some(doc)) = (entry.as_object_mut(), doc.as_object()) {
+                            entry.extend(doc.clone());
+                        }
+                    }
+                    // One unreadable document shouldn't lose the others.
+                    Err(e) => {
+                        debug!("could not read Form D {accession}: {e:#}");
+                        entry["error"] = json!(format!("{e:#}"));
+                    }
+                }
+                filings.push(entry);
+            }
+
+            let next_offset = offset + filings.len();
+            let mut result = json!({
+                "company": data["name"],
+                "ticker": company.ticker,
+                "cik": cik,
+                "returned": filings.len(),
+                "offset": offset,
+                "filings": filings,
+            });
+            if more {
+                result["next_offset"] = json!(next_offset);
+            }
+            if result["filings"].as_array().is_some_and(Vec::is_empty) {
+                result["note"] = json!(
+                    "No Form D filings in this filer's recent submissions. A company that \
+                     raised privately before going public may have them further back: see \
+                     sec_recent_filings with form_type 'D'."
+                );
             }
             Ok(result)
         }
@@ -2515,6 +2594,18 @@ impl SecMcp {
     }
 
     #[tool(
+        title = "Private Offerings (Form D)",
+        description = "Money raised without a registered offering: Form D notices, filed by private companies, funds and public companies within 15 days of a first sale. Most filers have no ticker, so find the CIK with sec_lookup_cik's 'name' first. Returns filings newest first, each with the issuer (entity type, jurisdiction, state), industry group (for a fund, its type such as hedge, private equity or venture capital), revenue or net-asset range (often 'Decline to Disclose'), the exemption claimed in plain language (Rule 506(b), 506(c), Investment Company Act 3(c)(1) or 3(c)(7)), the date of first sale, securities offered, total offering amount, amount sold and amount remaining (a fund's open-ended offering reads 'Indefinite'), number of investors, sales commissions and finder's fees, brokers paid to sell it, and the executive officers, directors and promoters named. Amendments (D/A) are included: funds file one every year, and the newest filing carries the running total. A Form D reports a raise, not the price or valuation. Reads 5 filings by default and at most 10 per call; pass 'next_offset' back as 'offset' for older ones.",
+        annotations(read_only_hint = true, open_world_hint = true)
+    )]
+    async fn sec_private_offerings(
+        &self,
+        Parameters(params): Parameters<PrivateOfferingsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(self.call("sec_private_offerings", &params).await)
+    }
+
+    #[tool(
         title = "Cross-Company XBRL Frames",
         description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns entries sorted by value, largest first, 20 by default; 'total' says how many filers reported, and passing 'next_offset' back as 'offset' pages down the ranking. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
         annotations(read_only_hint = true, open_world_hint = true)
@@ -2543,6 +2634,7 @@ impl ServerHandler for SecMcp {
             "Tools for reading SEC EDGAR data: CIK lookup by ticker or name, recent filings, the text of \
              filings and their exhibits, full-text search, XBRL financial concepts and \
              facts, insider transactions, 5%-plus holders (Schedules 13D and 13G), \
+             private offerings (Form D), \
              company info, ticker listings, and \
              cross-company frames. \
              The SEC fair-access policy requires a contact email; if a tool reports that one \
@@ -2929,6 +3021,27 @@ mod tests {
     }
 
     #[test]
+    fn a_page_of_filings_skips_the_offset_and_reports_more() {
+        let data = json!({ "filings": { "recent": {
+            "form": ["4", "D", "8-K", "D/A", "D", "D"],
+            "filingDate": ["2026-06-06", "2026-05-05", "2026-04-04", "2026-03-03", "2026-02-02", "2026-01-01"],
+            "accessionNumber": ["a1", "a2", "a3", "a4", "a5", "a6"],
+            "primaryDocument": ["d1", "d2", "d3", "d4", "d5", "d6"],
+        }}});
+        let is_d = |form: &str| matches!(form, "D" | "D/A");
+        let (rows, more) = select_filings(&data, 1, 2, is_d);
+        let accessions: Vec<&str> = rows.iter().map(|r| r.accession.as_str()).collect();
+        assert_eq!(accessions, ["a4", "a5"]);
+        assert_eq!(rows[0].form, "D/A");
+        assert_eq!(rows[0].filed, "2026-03-03");
+        assert!(more, "a6 is left");
+        // The last page says there is nothing more.
+        let (rows, more) = select_filings(&data, 2, 5, is_d);
+        assert_eq!(rows.len(), 2);
+        assert!(!more);
+    }
+
+    #[test]
     fn an_entity_match_strips_the_appended_tickers() {
         // Captured live on 26 October 2026 from `keysTyped=berkshire`.
         let hit = json!({
@@ -3030,7 +3143,7 @@ mod tests {
     #[test]
     fn every_tool_carries_a_title_and_behaviour_hints() {
         let tools = SecMcp::tool_router().list_all();
-        assert_eq!(tools.len(), 12);
+        assert_eq!(tools.len(), 13);
         for tool in &tools {
             let name = tool.name.as_ref();
             assert!(tool.title.is_some(), "{name} has no title");

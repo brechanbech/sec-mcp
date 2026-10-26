@@ -61,6 +61,7 @@ On your first SEC-related request Claude will explain that a contact email is re
 - *"What industry is NVDA in according to the SEC?"*
 - *"What is Bridgewater Associates' CIK, and what has it filed recently?"*
 - *"Who owns more than 5% of Sonos, and has any of them filed a 13D?"*
+- *"How much did SpaceX raise in private rounds before it listed?"*
 - *"Show me Amazon's most recent 10-K filing"*
 - *"What tickers are listed on NYSE with 'energy' in the name?"*
 - *"What financial metrics does Apple report to the SEC?"*
@@ -79,6 +80,7 @@ On your first SEC-related request Claude will explain that a contact email is re
 | `sec_filing_text` | The text of a filing document or exhibit (10-K, 10-Q, 8-K, earnings release EX-99.1, proxy): its section index, any section by item, a search within it, or pages from any point. Given a filing, lists its documents by type |
 | `sec_full_text_search` | Search the **body text** of filings since 2001, exhibits included — the only tool here that finds companies by what they *said*, rather than needing the company up front. Filter by form, ticker and date (amendments [excluded unless asked for](#amendments-10-ka-and-friends)); every hit carries a direct document URL |
 | `sec_insider_transactions` | Forms 3, 4 and 5 — who bought or sold, when, how many shares and at what price, with transaction codes in plain language and footnotes resolved. Also Form 144, an insider's notice of a proposed sale, with any 10b5-1 plan date |
+| `sec_private_offerings` | Form D — money raised without a registered offering by private companies, funds and public companies: amount offered and sold, investors, the exemption claimed, brokers paid, and the officers, directors and promoters named |
 | `sec_beneficial_ownership` | Schedules 13D and 13G — who owns more than 5% of a company, with voting and dispositive power, percent of class and, for a 13D, the holder's stated purpose. Given a holder's CIK, what that holder owns above 5% |
 | `sec_financial_concept` | Historical financial data from XBRL (revenue, net income, EPS, assets…) — latest 20 facts by default, paging back into older history |
 | `sec_list_tickers` | Search/list all SEC-registered tickers with exchange info — 50 per page, with paging |
