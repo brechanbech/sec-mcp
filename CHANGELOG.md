@@ -8,6 +8,8 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
 ### Added
 - **Every tool accepts a CIK where it takes a ticker.** SEC's ticker list holds
   only current tickers, so a company that was acquired, went bankrupt or
