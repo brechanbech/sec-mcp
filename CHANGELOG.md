@@ -26,6 +26,24 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   Schedule 13D filed last week". A call with neither a query nor a filter is
   refused rather than searching all of EDGAR.
   - **No new tool.** Both extend existing tools, so sec-mcp stays at thirteen.
+- **`sec_institutional_holdings` reads Form 13F**: what an institutional
+  manager holds each quarter. Reach a manager without a ticker, such as
+  Bridgewater, through `sec_lookup_cik`'s `name`.
+  - **Positions.** The table's rows, one per position per sub-manager, are
+    summed into positions by CUSIP, class and put/call, largest first. Each
+    gives its value in dollars, percent of portfolio, shares or principal,
+    voting authority and investment discretion. The positions add up to the
+    cover page's total.
+  - **Filtering.** `query` narrows to an issuer by part of its name or by
+    CUSIP, so "does Berkshire hold Apple" is one call. Issuers are named as
+    filed ("APPLE INC"), since 13F has no tickers and CUSIP is licensed.
+  - **Periods.** The latest report is the default, or pass `report_period`; the
+    response lists the periods available. Values from filings before 3
+    January 2023, which were in thousands, are converted to dollars.
+    Amendments for the period are listed, not merged.
+  - **Scope.** This answers what one manager holds, not who holds a stock: for
+    holders above 5% use `sec_beneficial_ownership`.
+  - **Tool count.** This takes sec-mcp to fourteen tools.
 - **`sec_financial_concept` takes `include_amendments`.** The `annual` and
   `quarterly` period filters still leave out amendments by default, since the
   original filing already reports the period. With `include_amendments: true`

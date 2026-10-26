@@ -36,6 +36,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 mod filing_text;
+mod form13f;
 mod form144;
 mod form_d;
 mod latest;
@@ -99,6 +100,10 @@ const DOCUMENT_CAP: usize = 25 * 1024 * 1024;
 
 /// Entries per request to the latest-filings feed: its largest page size.
 const LATEST_PAGE: usize = 100;
+
+/// The most a 13F information table may be. BlackRock's, the largest in
+/// practice, ran to 23 MB in 2026.
+const HOLDINGS_TABLE_CAP: usize = 64 * 1024 * 1024;
 
 /// A small least-recently-used cache. Filed documents never change, so entries
 /// need no expiry; the bound is on memory, where a 10-K's text is about 0.4 MB.
@@ -772,6 +777,32 @@ struct PrivateOfferingsParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct InstitutionalHoldingsParams {
+    /// The manager: its CIK (find it with sec_lookup_cik's 'name', e.g.
+    /// 'Bridgewater Associates'), or a ticker for a listed one such as BRK-B.
+    ticker: String,
+    /// Optional quarter end, YYYY-MM-DD, e.g. '2026-06-30'. Default: the latest
+    /// report. The response lists the periods available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    report_period: Option<String>,
+    /// Optional: only positions whose issuer name contains this text, e.g.
+    /// 'apple', or with this CUSIP. Issuers are named as filed ('APPLE INC').
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "String")]
+    query: Option<String>,
+    /// Number of positions to return, largest value first (default 25, max 100)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 25))]
+    limit: Option<u64>,
+    /// Number of positions to skip, for paging (default 0). Pass the previous
+    /// response's 'next_offset'.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "u64", extend("default" = 0))]
+    offset: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct XbrlFramesParams {
     /// XBRL concept name, e.g. 'Revenues', 'NetIncomeLoss', 'Assets'
     concept: String,
@@ -1329,6 +1360,8 @@ struct FilingRow {
     filed: String,
     accession: String,
     primary_document: String,
+    /// The period a report covers, where the form has one (13F, 10-K); else empty.
+    report_date: String,
 }
 
 /// A page of the filings in `filings.recent` whose form `wanted` accepts,
@@ -1362,6 +1395,7 @@ fn select_filings(
             filed: cell("filingDate", i),
             accession: cell("accessionNumber", i),
             primary_document: cell("primaryDocument", i),
+            report_date: cell("reportDate", i),
         });
     }
     (rows, false)
@@ -2116,6 +2150,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 filed,
                 accession,
                 primary_document,
+                ..
             } in selected
             {
                 let url = ownership_xml_url(&cik_num, &accession, &primary_document);
@@ -2218,6 +2253,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 filed,
                 accession,
                 primary_document,
+                ..
             } in selected
             {
                 let Some((schedule, structured)) = schedule13::classify_form(&form) else {
@@ -2335,6 +2371,7 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 filed,
                 accession,
                 primary_document,
+                ..
             } in selected
             {
                 let url = ownership_xml_url(&cik_num, &accession, &primary_document);
@@ -2383,6 +2420,156 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 );
             }
             Ok(result)
+        }
+
+        "sec_institutional_holdings" => {
+            let client = state.read().await.client()?;
+            let arg = |key: &str| args[key].as_str().map(str::trim).filter(|s| !s.is_empty());
+            let ticker = arg("ticker").context("ticker required")?.to_string();
+            let limit = args["limit"].as_u64().unwrap_or(25).clamp(1, 100) as usize;
+            let offset = args["offset"].as_u64().unwrap_or(0) as usize;
+
+            let company = client.resolve_company(&ticker).await?;
+            let cik = company.cik.clone();
+            let data = client.recent_filings(&cik).await?;
+            let cik_num = cik.trim_start_matches('0').to_string();
+
+            // A report is the original 13F-HR, or a 13F-NT when another manager
+            // reports the holdings. Amendments are listed beside it, not merged:
+            // one may restate the report, another only add holdings.
+            let (rows, _) = select_filings(&data, 0, usize::MAX, |f| f.starts_with("13F-"));
+            let is_report = |r: &FilingRow| matches!(r.form.as_str(), "13F-HR" | "13F-NT");
+            let mut periods: Vec<&str> = Vec::new();
+            for r in rows.iter().filter(|r| is_report(r)) {
+                if !periods.contains(&r.report_date.as_str()) {
+                    periods.push(&r.report_date);
+                }
+            }
+            let Some(period) = arg("report_period").or(periods.first().copied()) else {
+                anyhow::bail!(
+                    "{} has filed no Form 13F in its recent submissions. Only managers with \
+                     $100 million or more in US-listed equities file one; check the CIK with \
+                     sec_lookup_cik's 'name'.",
+                    data["name"].as_str().unwrap_or(&ticker)
+                );
+            };
+            let Some(report) = rows
+                .iter()
+                .find(|r| is_report(r) && r.report_date == period)
+            else {
+                anyhow::bail!(
+                    "no 13F report for the period ending {period}. Periods available: {}",
+                    periods
+                        .iter()
+                        .take(8)
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            };
+            let amendments: Vec<Value> = rows
+                .iter()
+                .filter(|r| r.form.ends_with("/A") && r.report_date == period)
+                .map(|r| json!({ "form": r.form, "accession": r.accession, "filed": r.filed }))
+                .collect();
+
+            let mut out = json!({
+                "manager": data["name"],
+                "cik": cik,
+                "form": report.form,
+                "accession": report.accession,
+                "filed": report.filed,
+                "report_period": period,
+                "periods_available": periods.iter().take(8).collect::<Vec<_>>(),
+            });
+            if !amendments.is_empty() {
+                out["amendments"] = json!(amendments);
+                out["amendments_note"] = json!(
+                    "These holdings are the original report's. An amendment either restates \
+                     it or adds holdings left out; read one with sec_filing_text."
+                );
+            }
+            if report.form == "13F-NT" {
+                out["note"] = json!(
+                    "A 13F-NT notice: this manager's holdings are reported in another \
+                     manager's 13F-HR, so there is no table here."
+                );
+                return Ok(out);
+            }
+
+            let multiplier = if report.filed.as_str() < form13f::DOLLARS_SINCE {
+                out["values_note"] = json!(
+                    "Filed before 3 January 2023, when 13F values were reported in thousands \
+                     of dollars; converted to dollars here."
+                );
+                1000.0
+            } else {
+                1.0
+            };
+
+            let cover_url =
+                ownership_xml_url(&cik_num, &report.accession, &report.primary_document);
+            match client
+                .get_text(&cover_url)
+                .await
+                .and_then(|xml| form13f::parse_cover(&xml, multiplier))
+            {
+                Ok(cover) => out["cover"] = cover,
+                Err(e) => debug!("could not read 13F cover {}: {e:#}", report.accession),
+            }
+
+            // The table's file name is the filing agent's choice; the filing
+            // header names its type.
+            let filing = filing_text::ArchivesRef::new(&cik_num, &report.accession, None)?;
+            let header = client.filing_header(&filing).await?;
+            let table = header
+                .documents
+                .iter()
+                .find(|d| d.doc_type.eq_ignore_ascii_case("INFORMATION TABLE"))
+                .context("this 13F filing lists no information table")?;
+            let table_url = filing.document_url(&table.filename);
+            let bytes = client.get_capped(&table_url, HOLDINGS_TABLE_CAP).await?;
+            // BlackRock's table parses to a million and a half nodes: keep that
+            // off the async workers.
+            let positions = tokio::task::spawn_blocking(move || {
+                form13f::parse_table(&String::from_utf8_lossy(&bytes), multiplier)
+            })
+            .await
+            .context("13F table parse was cancelled")??;
+
+            let portfolio: f64 = positions.iter().map(|p| p.value).sum();
+            let query = arg("query");
+            let matched: Vec<&form13f::Position> = positions
+                .iter()
+                .filter(|p| query.is_none_or(|q| p.matches(q)))
+                .collect();
+            let page: Vec<Value> = matched
+                .iter()
+                .skip(offset)
+                .take(limit)
+                .map(|p| p.to_json(portfolio))
+                .collect();
+
+            out["url"] = json!(table_url);
+            out["portfolio_value"] = json!(portfolio.round() as i64);
+            out["positions_total"] = json!(positions.len());
+            if let Some(q) = query {
+                out["query"] = json!(q);
+                out["matched"] = json!(matched.len());
+                if matched.is_empty() {
+                    out["note"] = json!(format!(
+                        "No position matches '{q}'. Issuers are named as filed, e.g. 'APPLE \
+                         INC' or 'ALPHABET INC'; try one word of the name, or the CUSIP."
+                    ));
+                }
+            }
+            out["returned"] = json!(page.len());
+            out["offset"] = json!(offset);
+            if offset + page.len() < matched.len() {
+                out["next_offset"] = json!(offset + page.len());
+            }
+            out["holdings"] = json!(page);
+            Ok(out)
         }
 
         "sec_filing_text" => {
@@ -2750,6 +2937,18 @@ impl SecMcp {
     }
 
     #[tool(
+        title = "Institutional Holdings (13F)",
+        description = "What an institutional manager holds: its quarterly Form 13F holdings report, read from the filing. Managers with $100 million or more in US-listed equities file one within 45 days of each quarter end. Pass the manager's CIK (find it with sec_lookup_cik's 'name', e.g. 'Bridgewater Associates'), or a ticker for a listed manager such as Berkshire Hathaway. Returns the latest report by default, or the one for 'report_period'; positions are aggregated by CUSIP, class and put/call across the table's rows and sorted by value, largest first, each with issuer, class, CUSIP, value in dollars, percent of the portfolio, shares (or principal), voting authority and investment discretion. 'query' narrows to an issuer by part of its name or by CUSIP: one call answers 'does Berkshire hold Apple'. Issuers are named as filed ('APPLE INC') and the table has no tickers, because CUSIP identifiers are licensed. This answers what one manager holds, not who holds a stock: for holders above 5% use sec_beneficial_ownership. 13F covers long positions in US-listed equities, options and some convertibles only, not shorts, cash or foreign shares, and may omit positions under confidential treatment. Amendments for the period are listed, not merged. Pages of 25 by default, at most 100; pass 'next_offset' back as 'offset'.",
+        annotations(read_only_hint = true, open_world_hint = true)
+    )]
+    async fn sec_institutional_holdings(
+        &self,
+        Parameters(params): Parameters<InstitutionalHoldingsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        Ok(self.call("sec_institutional_holdings", &params).await)
+    }
+
+    #[tool(
         title = "Cross-Company XBRL Frames",
         description = "Cross-company comparison — get a specific financial metric for all companies in a given period. For example, compare revenue across all filers for 2024. Returns entries sorted by value, largest first, 20 by default; 'total' says how many filers reported, and passing 'next_offset' back as 'offset' pages down the ranking. Note: 'instant' concepts (balance-sheet items measured at a point in time, e.g. Assets, Liabilities, StockholdersEquity, CashAndCashEquivalentsAtCarryingValue, CommonStockSharesOutstanding) require instant=true with a quarterly period. 'Duration' concepts (flow items measured over a period, e.g. Revenues, NetIncomeLoss, OperatingIncomeLoss, EarningsPerShareBasic) require instant=false (the default).",
         annotations(read_only_hint = true, open_world_hint = true)
@@ -2778,7 +2977,7 @@ impl ServerHandler for SecMcp {
             "Tools for reading SEC EDGAR data: CIK lookup by ticker or name, recent filings, the text of \
              filings and their exhibits, full-text search, XBRL financial concepts and \
              facts, insider transactions, 5%-plus holders (Schedules 13D and 13G), \
-             private offerings (Form D), \
+             private offerings (Form D), institutional holdings (Form 13F), \
              company info, ticker listings, and \
              cross-company frames. \
              The SEC fair-access policy requires a contact email; if a tool reports that one \
@@ -3304,7 +3503,7 @@ mod tests {
     #[test]
     fn every_tool_carries_a_title_and_behaviour_hints() {
         let tools = SecMcp::tool_router().list_all();
-        assert_eq!(tools.len(), 13);
+        assert_eq!(tools.len(), 14);
         for tool in &tools {
             let name = tool.name.as_ref();
             assert!(tool.title.is_some(), "{name} has no title");

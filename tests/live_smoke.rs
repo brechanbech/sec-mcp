@@ -504,6 +504,25 @@ fn live_smoke() {
         );
     }
 
+    // Form 13F: Berkshire's holdings report, aggregated from its table rows (one
+    // per sub-manager) into positions that add up to the cover page's total.
+    let brk = server.call_tool(
+        "sec_institutional_holdings",
+        json!({ "ticker": "BRK-B", "query": "apple" }),
+    );
+    assert_eq!(brk["form"], "13F-HR", "Berkshire 13F: {brk}");
+    assert!(
+        brk["holdings"][0]["issuer"]
+            .as_str()
+            .is_some_and(|i| i.contains("APPLE"))
+            && brk["holdings"][0]["value"].as_i64() > Some(0),
+        "Berkshire holds Apple: {brk}"
+    );
+    assert_eq!(
+        brk["portfolio_value"], brk["cover"]["table_value_total"],
+        "positions add up to the cover page total: {brk}"
+    );
+
     // Form 144: Apple's officers file notices of proposed sales, usually
     // several a month, each naming the seller and the shares to be sold.
     let notices = server.call_tool(
@@ -809,7 +828,7 @@ fn protocol_surface() {
     assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
 
     let tools = result["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 13, "expected 13 tools: {listed}");
+    assert_eq!(tools.len(), 14, "expected 14 tools: {listed}");
 
     // Named rather than merely counted: a count catches a tool vanishing but not
     // one being renamed, and the name is the part clients bind to.
@@ -823,6 +842,7 @@ fn protocol_surface() {
         "sec_financial_concept",
         "sec_full_text_search",
         "sec_insider_transactions",
+        "sec_institutional_holdings",
         "sec_list_tickers",
         "sec_lookup_cik",
         "sec_private_offerings",

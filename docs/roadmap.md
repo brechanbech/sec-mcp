@@ -7,7 +7,7 @@ committed work; the ordering reflects value-per-effort, not priority.
 Current scope is the four documented `data.sec.gov` APIs — submissions, XBRL
 company-concept, company-facts, and frames — plus the undocumented full-text
 search on `efts.sec.gov`, and ownership XML and filing documents from the Archives,
-surfaced as thirteen tools. Verified
+surfaced as fourteen tools. Verified
 against SEC's [EDGAR APIs page](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 on 29 July 2026: all four are current, none deprecated, no auth required, 10
 req/sec, `User-Agent` mandatory. EDGAR Next (mandatory filer enrolment since
@@ -213,7 +213,7 @@ removed.
 `data.sec.gov`; this pulls text from `www.sec.gov/Archives`). Those costs are
 shared with item 4, so doing this first makes 13F cheaper later.
 
-## 4. 13F institutional holdings
+## 4. 13F institutional holdings — **done** (the tractable half)
 
 **Not low-hanging — and not for parsing reasons.** The information table is
 regular XML (`nameOfIssuer`, `titleOfClass`, `cusip`, `value`, `sshPrnamt`,
@@ -237,6 +237,28 @@ obstacles are elsewhere, and two of the three sit outside the code:
 **If revisited, scope it honestly to the tractable half**: "what does manager X
 hold", taking a CIK, reporting issuer names as filed. That is a real capability,
 but a much smaller promise than "who holds this stock". Item 5 has removed obstacle 2.
+
+**Done** (26 October 2026) as `sec_institutional_holdings`, the fourteenth tool,
+scoped as above.
+
+- **Finding the table.** The information table is a separate XML file named by
+  the filing agent (`56757.xml`, `form13fInfoTable.xml`). The filing header
+  types it `INFORMATION TABLE`, so `sec_filing_text`'s header reader finds it.
+- **Aggregating rows.** The table has a row per position per sub-manager and
+  discretion: Apple is 12 of Berkshire's 89 rows. Rows are summed by CUSIP,
+  class and put/call, and the positions add up exactly to the cover page's
+  `tableValueTotal`. That holds for Berkshire (.25B) and for BlackRock
+  (49,968 rows, 5,696 positions, .73T).
+- **Units.** Values are dollars for filings made from 3 January 2023, and
+  thousands before. Older reports are converted.
+- **Size.** BlackRock's table is 23 MB. It is capped at 64 MB and parsed on a
+  blocking thread: 1.8 s of CPU and about 200 MB resident in a debug build.
+- **Amendments.** Those for the period are listed, not merged. A 13F-HR/A
+  either restates the report or adds holdings, and only its cover page says
+  which.
+- **What it says about itself.** The description points "who holds a stock"
+  to `sec_beneficial_ownership`, and says what 13F leaves out: shorts, cash,
+  foreign shares and confidential positions.
 
 ## Beyond the documented API (recorded 24 October 2026)
 
