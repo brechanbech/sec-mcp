@@ -114,6 +114,8 @@ under us, so an assertion belongs there from day one.
 
 ## 2. Filing document retrieval
 
+**Design proposed 26 October 2026: [`filing-text-design.md`](filing-text-design.md).**
+
 `https://www.sec.gov/Archives/edgar/data/{cik}/{accession-nodash}/index.json`
 enumerates every document in a filing plus the XBRL zip (verified working).
 
