@@ -372,6 +372,37 @@ fn live_smoke() {
         "an empty period filter must report the forms actually present: {fpi_annual}"
     );
 
+    // Amendments on request. Apple's January 2010 10-K/A restated fiscal 2009
+    // under new revenue-recognition rules: left out of 'annual' by default,
+    // there when asked for.
+    let mut restated = |include: bool| {
+        server.call_tool(
+            "sec_financial_concept",
+            json!({
+                "ticker": "AAPL",
+                "concept": "SalesRevenueNet",
+                "period": "annual",
+                "include_amendments": include,
+                "limit": 100
+            }),
+        )
+    };
+    let with = restated(true);
+    let without = restated(false);
+    let has_amendment = |v: &serde_json::Value| {
+        v["data"]
+            .as_array()
+            .is_some_and(|d| d.iter().any(|f| f["form"] == "10-K/A"))
+    };
+    assert!(
+        has_amendment(&with) && with["amended_facts"].as_u64() > Some(0),
+        "Apple's 10-K/A facts with include_amendments: {with}"
+    );
+    assert!(
+        !has_amendment(&without),
+        "no 10-K/A facts by default: {without}"
+    );
+
     // Paging back through a concept: page two must reach further into the past
     // than page one. "Past" means period `end`, which EDGAR sorts on; `filed`
     // is not monotonic, since each 10-K re-reports earlier years as

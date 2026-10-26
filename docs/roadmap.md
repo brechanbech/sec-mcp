@@ -427,9 +427,10 @@ cache are the right fit.
 - **Amendments are excluded from period filters.** `annual`/`quarterly` match
   base forms only, so a `10-K/A` restatement is not returned. Deliberate — the
   amended period is already present via the original filing, and admitting both
-  would emit two facts for one period. Revisit if restatements matter.
-  `sec_full_text_search` follows the same default but, unlike the period
-  filters, can be told otherwise (`include_amendments`).
+  would emit two facts for one period. **Opt-in added** (26 October 2026):
+  `include_amendments: true` admits them, and `amended_facts` counts them, as
+  `sec_full_text_search` already allowed. Apple's fiscal 2009 revenue reads
+  $36.537B on the 10-K and $42.905B on the January 2010 10-K/A.
 - **A filtered full-text page can come back short.** Dropping amendments
   happens after EDGAR's paging, so a page may return fewer than `limit` hits
   rather than spending extra requests to top it up. Callers page with

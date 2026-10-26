@@ -634,6 +634,12 @@ struct FinancialConceptParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "String", extend("enum" = ["annual", "quarterly"]))]
     period: Option<String>,
+    /// With 'period': also match amendments (10-K/A, 10-Q/A, 20-F/A), which
+    /// restate a period the original already reported, so the series then holds
+    /// both (default false). Without 'period', every form is returned anyway.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "bool", extend("default" = false))]
+    include_amendments: Option<bool>,
     /// Number of facts to return (default 20, max 100), most recent first
     #[serde(default)]
     #[schemars(with = "u64", extend("default" = 20))]
@@ -1451,6 +1457,22 @@ fn is_quarterly_form(form: Option<&str>) -> bool {
     matches!(form, Some("10-Q" | "6-K"))
 }
 
+/// Whether a fact filed on `form` belongs to the `period` filter. Amendments
+/// (`10-K/A`) are left out unless asked for, since the original filing already
+/// reports the period; with no filter every form matches, amendments included.
+fn period_matches(form: Option<&str>, period: Option<&str>, include_amendments: bool) -> bool {
+    let form = if include_amendments {
+        form.map(|f| f.strip_suffix("/A").unwrap_or(f))
+    } else {
+        form
+    };
+    match period {
+        Some("annual") => is_annual_form(form),
+        Some("quarterly") => is_quarterly_form(form),
+        _ => true,
+    }
+}
+
 /// Append row-shaped filings from one column-major submissions block into
 /// `out`, honoring `form_filter`, until `out` reaches `limit`. The block is
 /// either `filings.recent` from the main submissions file or the top-level
@@ -1798,14 +1820,15 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
                 .and_then(|(k, v)| v.as_array().map(|a| (k, a.clone())))
                 .unwrap_or(("unknown", vec![]));
 
+            let include_amendments = args["include_amendments"].as_bool().unwrap_or(false);
             let filtered: Vec<&Value> = entries
                 .iter()
-                .filter(|e| match period_filter {
-                    Some("annual") => is_annual_form(e["form"].as_str()),
-                    Some("quarterly") => is_quarterly_form(e["form"].as_str()),
-                    _ => true,
-                })
+                .filter(|e| period_matches(e["form"].as_str(), period_filter, include_amendments))
                 .collect();
+            let amended = filtered
+                .iter()
+                .filter(|e| e["form"].as_str().is_some_and(|f| f.ends_with("/A")))
+                .count();
 
             // A filter that matches nothing is indistinguishable from "this
             // company reports nothing" unless we say otherwise — report which
@@ -1846,6 +1869,11 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             // it does not start at the beginning.
             if window.start > 0 {
                 result["next_offset"] = json!(offset + page.len());
+            }
+            // An amendment restates a period the original already reported, so
+            // the caller should know the series now holds both.
+            if include_amendments && period_filter.is_some() {
+                result["amended_facts"] = json!(amended);
             }
 
             if !unmatched_forms.is_empty() {
@@ -2639,7 +2667,7 @@ impl SecMcp {
 
     #[tool(
         title = "Financial Concept History",
-        description = "Get historical values for a financial concept from SEC XBRL data. Returns the most recent 20 facts by default (in chronological order); 'total_facts' says how many exist, and passing 'next_offset' back as 'offset' pages further into the past. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'.",
+        description = "Get historical values for a financial concept from SEC XBRL data. Returns the most recent 20 facts by default (in chronological order); 'total_facts' says how many exist, and passing 'next_offset' back as 'offset' pages further into the past. The 'annual' and 'quarterly' period filters leave out amendments (10-K/A), which restate periods the original already reported; pass include_amendments: true to admit them, and 'amended_facts' counts them. Common concepts: 'Revenues', 'NetIncomeLoss', 'EarningsPerShareBasic', 'Assets', 'StockholdersEquity', 'OperatingIncomeLoss', 'CashAndCashEquivalentsAtCarryingValue'.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_financial_concept(
@@ -3134,6 +3162,23 @@ mod tests {
         assert_eq!(newest_first_window(50, 50, 20), 0..0);
         assert_eq!(newest_first_window(50, 999, 20), 0..0);
         assert_eq!(newest_first_window(0, 0, 20), 0..0);
+    }
+
+    #[test]
+    fn period_filters_admit_amendments_only_when_asked() {
+        // The default: the original reports the period, so the restatement
+        // would double it.
+        assert!(period_matches(Some("10-K"), Some("annual"), false));
+        assert!(!period_matches(Some("10-K/A"), Some("annual"), false));
+        assert!(!period_matches(Some("10-Q/A"), Some("quarterly"), false));
+        // Asked for, every annual or quarterly amendment matches.
+        assert!(period_matches(Some("10-K/A"), Some("annual"), true));
+        assert!(period_matches(Some("20-F/A"), Some("annual"), true));
+        assert!(period_matches(Some("10-Q/A"), Some("quarterly"), true));
+        // An amendment of another form does not slip into the period.
+        assert!(!period_matches(Some("8-K/A"), Some("annual"), true));
+        // No filter: everything, amendments included, either way.
+        assert!(period_matches(Some("10-K/A"), None, false));
     }
 
     #[test]

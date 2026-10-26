@@ -108,7 +108,10 @@ sec-mcp therefore **excludes amendments unless you ask for them**:
 
 - `sec_financial_concept`'s `annual`/`quarterly` period filters match base forms
   only. The amended period is already covered by the original filing, and
-  admitting both would report two facts for one period.
+  admitting both would report two facts for one period. Pass
+  `include_amendments: true` to admit them when the restatement is what you
+  want: Apple's fiscal 2009 revenue is $36.5B on the original 10-K and $42.9B on
+  the 10-K/A. `amended_facts` then counts them.
 - `sec_full_text_search` with a form filter drops amendments. EDGAR itself does
   not: it filters on a filing's *root* form, so `forms=10-K` also returns
   `10-K/A`. To get amendments, request the form directly (`10-K/A`), list both

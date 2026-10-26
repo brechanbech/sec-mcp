@@ -26,6 +26,13 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
   Schedule 13D filed last week". A call with neither a query nor a filter is
   refused rather than searching all of EDGAR.
   - **No new tool.** Both extend existing tools, so sec-mcp stays at thirteen.
+- **`sec_financial_concept` takes `include_amendments`.** The `annual` and
+  `quarterly` period filters still leave out amendments by default, since the
+  original filing already reports the period. With `include_amendments: true`
+  they admit `10-K/A`, `10-Q/A`, `20-F/A` and the like, and `amended_facts`
+  counts them. This is for when the restatement is the point: Apple's fiscal
+  2009 revenue reads $36.537B on the 10-K and $42.905B on the January 2010
+  10-K/A.
 
 ## [0.9.0] - 2026-10-26
 
