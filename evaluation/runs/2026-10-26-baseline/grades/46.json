@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "7.4% MISS",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it couldn't get the guidance or the actual figures, and it gives no beat or miss percentage. It meets no criterion and asserts nothing that conflicts with the expected answer.",
+  "id": 46
+}

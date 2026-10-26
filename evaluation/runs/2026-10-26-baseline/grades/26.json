@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "$500 million of Series A 6.500% Fixed-to-Floating Rate Junior Subordinated Debentures",
+      "met": false
+    },
+    {
+      "criterion": "Scheduled maturity date: May 15, 2057",
+      "met": false
+    },
+    {
+      "criterion": "Final maturity date: May 15, 2067",
+      "met": false
+    },
+    {
+      "criterion": "Redeemable on or after May 15, 2037 at principal amount plus accrued and unpaid interest",
+      "met": false
+    },
+    {
+      "criterion": "Redeemable prior to May 15, 2037 at principal amount plus accrued and unpaid interest or make-whole price",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer says it could not confirm the terms, but it still offers a guessed profile: a 5.750% original coupon, maturity in 2053, and a Term SOFR + 2.938% floating rate. These conflict with the expected 6.500% Series A debentures, which have a scheduled maturity of May 15, 2057 and a final maturity of May 15, 2067. It meets no criterion. It never states the $500M amount, the correct maturities or the May 15, 2037 redemption terms. Because it states figures that conflict with the expected answer, it is graded wrong rather than no_answer.",
+  "id": 26
+}

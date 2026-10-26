@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Elinor Mertz is the current CFO of Airbnb",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer identifies Elinor (Ellie) Mertz as Airbnb's current CFO, which matches the expected answer. Nothing in it contradicts the expected answer.",
+  "id": 6
+}

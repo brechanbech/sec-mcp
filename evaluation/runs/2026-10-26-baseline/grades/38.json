@@ -1,0 +1,33 @@
+{
+  "criteria": [
+    {
+      "criterion": "Quarterly guidance includes Total Revenue YoY Growth",
+      "met": true
+    },
+    {
+      "criterion": "Quarterly guidance includes Operating Margin",
+      "met": true
+    },
+    {
+      "criterion": "Quarterly guidance includes Earnings Per Share",
+      "met": true
+    },
+    {
+      "criterion": "Full FY guidance includes Earnings per Share YoY Growth",
+      "met": false
+    },
+    {
+      "criterion": "Full FY guidance includes Free Cash Flow",
+      "met": false
+    },
+    {
+      "criterion": "Full FY guidance includes Gross Leverage",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer names operating margin, EPS and total revenue as guided metrics, taken from searches that included the word \"quarter\". That loosely meets the quarterly criteria. It never separates quarterly from full-year guidance. It gives no full-year EPS YoY growth at all. It lists free cash flow without calling it full-year. It only guesses, with heavy hedging, that gross leverage may be a full-year target. The extra metrics it lists (capacity, CASM-Ex, fuel) don't conflict with the expected answer, so there's no contradiction.",
+  "id": 38
+}

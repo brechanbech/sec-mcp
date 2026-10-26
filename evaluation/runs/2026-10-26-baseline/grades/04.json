@@ -1,0 +1,41 @@
+{
+  "criteria": [
+    {
+      "criterion": "Thomas Carley",
+      "met": false
+    },
+    {
+      "criterion": "Joseph Clabby",
+      "met": false
+    },
+    {
+      "criterion": "Thomas Cusick",
+      "met": false
+    },
+    {
+      "criterion": "Gary Kramer",
+      "met": false
+    },
+    {
+      "criterion": "Anthony Meeker",
+      "met": false
+    },
+    {
+      "criterion": "Carla Moradi",
+      "met": false
+    },
+    {
+      "criterion": "Alexandra Morehouse",
+      "met": false
+    },
+    {
+      "criterion": "Vincent Price",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says outright that it couldn't find the 2024 nominees. It names none of them. Joseph Clabby appears only as someone who filed a Form 3 in 2022, not as a nominee, so that criterion isn't met. The answer guesses the nomination might have been Mark Finn in 2025, but it frames this as unconfirmed, so it isn't a firm contradiction.",
+  "id": 4
+}

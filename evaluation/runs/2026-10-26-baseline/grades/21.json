@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "FY 2022: $160.44",
+      "met": false
+    },
+    {
+      "criterion": "FY 2023: $163.51",
+      "met": false
+    },
+    {
+      "criterion": "FY 2024: $166.23",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer meets none of the correctness criteria. It gives FY2022 as $160.53, where the expected answer is $160.44, and FY2023 as $163.54, where the expected answer is $163.51. Both differ by more than a rounding difference in the last shown digit, because the answer divided rounded inputs. These conflicting figures count as a contradiction. The answer did not provide a FY2024 figure.",
+  "id": 21
+}

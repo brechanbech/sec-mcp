@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "20% of customers were derived from channel partners",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says the figure was not found and gives no percentage, so it meets no criterion and contradicts nothing.",
+  "id": 33
+}

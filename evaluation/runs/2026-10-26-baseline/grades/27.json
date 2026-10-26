@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "$14,426,266,000",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says outright that it could not find the total of $14,426,266,000. It does give one component, content obligations of $11,424,696,000, but labels it as only part of the total, not the answer. That is a partial disclosure, not a conflicting claim, so there is no contradiction. It uses the same period as the question (FY2024 10-K, next 12 months, meaning 2025).",
+  "id": 27
+}

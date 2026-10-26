@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Salesforce's debt excluding sustainability notes is $7.5 billion as of March 10, 2025",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer's final figure is about $7.5 billion ($8.5B total minus $1.0B of sustainability notes), which matches the expected answer. It says the $1.0B sustainability amount is inferred, but nothing in it conflicts with the expected answer. Using the January 31, 2025 balance from the 10-K filed March 5, 2025 fits the question's March 10, 2025 date.",
+  "id": 23
+}

@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "$85,002 thousands which is 51.3% of leases",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives $85,002 thousand and 51.3%, which matches the expected answer exactly. Nothing in it conflicts with the expected answer.",
+  "id": 18
+}

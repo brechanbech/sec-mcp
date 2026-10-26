@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "Purchase loan originations: $12,057,993 in thousands",
+      "met": false
+    },
+    {
+      "criterion": "Refinance loan originations: $5,250,321 in thousands",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the purchase/refinance split and gives no figures. It only points to the correct 10-Q.",
+  "id": 31
+}

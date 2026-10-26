@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "80bps beat from low end",
+      "met": false
+    },
+    {
+      "criterion": "70bps beat from high end",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says TJX probably beat its guidance, but it says outright that it couldn't find the guidance range or work out the bps difference. It gives neither the 80bps beat from the low end nor the 70bps beat from the high end. It mentions an 11.6% margin only as a tentative figure it couldn't confirm. That doesn't conflict with the expected answer. Because the answer declines to give the figure the question asks for, it meets no criterion.",
+  "id": 2
+}

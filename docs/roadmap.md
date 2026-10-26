@@ -356,6 +356,18 @@ crediting Vals AI wherever results are published. **Expectation for the
 baseline**: low, and mostly a measure of item 2's absence. That is the point
 of running it first.
 
+**Baseline, 26 October 2026** ([`evaluation/runs/2026-10-26-baseline/`](../evaluation/runs/2026-10-26-baseline/notes.md)):
+11 of 50 correct (22%), class-balanced 21.6%, and no citation after the cutoff.
+Most failures are item 2 as expected. It also found two bugs cheaper than item
+2, which should come first:
+
+- **Accept a CIK wherever a ticker is taken.** Four questions failed because
+  the company has no current ticker (US Steel, Spirit Airlines, Warner Bros.
+  Discovery). Any point-in-time question meets delisted and renamed companies.
+- **Page or filter `sec_company_facts`, and tighten `sec_insider_transactions`.**
+  Six responses of 94k–181k characters exceeded Claude Code's tool-output limit
+  and were lost to the agent.
+
 ## Explicitly rejected
 
 **Bulk ZIP archives.** SEC offers `companyfacts.zip` and `submissions.zip`

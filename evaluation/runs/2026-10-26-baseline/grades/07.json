@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "$3.25 Billion",
+      "met": false
+    },
+    {
+      "criterion": "Contradiction check against $3.25 Billion",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the total consideration figure and gives no amount for the Endeavor asset acquisition. The $8.1B XBRL value it mentions is explicitly tied to earlier transactions, so it is not an answer to the question and does not contradict the expected $3.25B.",
+  "id": 7
+}

@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Lyft's Q4'24 Adjusted EBITDA margin beat management guidance at midpoint in Q3'24 by 26.1bps",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says outright that it can't give a confirmed beat/miss figure in bps, and that the bps figure was \"Not found with these tools.\" It calls a beat only \"most likely\". Its \"roughly 20–25 bps\" is labelled as illustration only, rests on an assumed Gross Bookings figure, and doesn't match 26.1bps. Because the answer declined and hedged, I'm not treating that range as an asserted contradiction. No criterion is met.",
+  "id": 37
+}

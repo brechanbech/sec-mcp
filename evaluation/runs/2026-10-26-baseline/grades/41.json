@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "KDP: 0.83",
+      "met": false
+    },
+    {
+      "criterion": "KO: 0.79",
+      "met": false
+    },
+    {
+      "criterion": "PEP: 0.75",
+      "met": false
+    },
+    {
+      "criterion": "KHC: 0.70",
+      "met": false
+    },
+    {
+      "criterion": "SJM: 0.59",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer gives only KDP's ratio, about 0.85 (84.8%). That conflicts with the expected 0.83, and the gap is bigger than a rounding difference at two decimals. It gives no ratio for KO, PEP, KHC or SJM and no ranking, so it meets no criterion and contains a conflicting figure.",
+  "id": 41
+}

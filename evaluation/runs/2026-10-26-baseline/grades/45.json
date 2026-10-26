@@ -1,0 +1,33 @@
+{
+  "criteria": [
+    {
+      "criterion": "Acquisition of Follow Up Boss for $399 million with up to $100 million in contingent consideration on December 8",
+      "met": false
+    },
+    {
+      "criterion": "Acquisition of Spruce for $19 million on September 11",
+      "met": false
+    },
+    {
+      "criterion": "Acquisition of Aryeo for $35 million on July 31",
+      "met": false
+    },
+    {
+      "criterion": "Decline in revenue related to Mortgages and Residential (Premier Agent) in post-COVID tight housing market",
+      "met": false
+    },
+    {
+      "criterion": "Acquisition strategy focused on subscription revenue platforms",
+      "met": true
+    },
+    {
+      "criterion": "Strategy to round out portfolio of home-buying services",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer names Follow Up Boss but not the $399M price, the $100M contingent consideration or the December 8 date. It only cites $433M of total cash paid for acquisitions in 2023, which is a different measure from the deal price rather than a conflicting figure. It names Aryeo without the $35M price or the July 31 date, and its wording loosely ties Aryeo to 2024. That placement is vague rather than a clear conflict with the expected July 31 date. Spruce is not mentioned. The answer does not claim that mortgage or Premier Agent revenue declined; it says it could not get the revenue split by business line. It does describe the deals as adding subscription-style income from agent software, which meets the subscription-strategy criterion. Nothing it says directly conflicts with the expected answer, so the grade is partial.",
+  "id": 45
+}

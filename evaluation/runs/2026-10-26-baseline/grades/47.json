@@ -1,0 +1,37 @@
+{
+  "criteria": [
+    {
+      "criterion": "In Force Premium (IFP): $944 Million, high end of guidance range",
+      "met": false
+    },
+    {
+      "criterion": "Gross Earned Premium (GEP): $827 Million, above high end of guidance range",
+      "met": false
+    },
+    {
+      "criterion": "Revenue: $526.5 Million, above high end of range",
+      "met": false
+    },
+    {
+      "criterion": "Adjusted EBITDA Loss: $(149.7) Million, above high end of range",
+      "met": false
+    },
+    {
+      "criterion": "Stock-based Compensation: $64.5 Million, above the expected $64 Million",
+      "met": false
+    },
+    {
+      "criterion": "Capital Expenditures: $9.4 Million, below the expected $10 million",
+      "met": false
+    },
+    {
+      "criterion": "Weighted Common Shares: 71 Million, right on target",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer gives the correct FY2024 revenue of $526.5M, but it says outright that it couldn't find the guidance and declines to compare. The revenue criterion needs both the figure and the 'above high end of range' comparison, so it isn't fully met. The answer gives no IFP, GEP, Adjusted EBITDA, SBC, CapEx or share figures. Nothing it states conflicts with the expected answer.",
+  "id": 47
+}

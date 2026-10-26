@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "2024 revenue: 2,865,507",
+      "met": true
+    },
+    {
+      "criterion": "2022 revenue: 1,905,871",
+      "met": true
+    },
+    {
+      "criterion": "3 year revenue CAGR: 14.56%",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": true,
+  "grade": "wrong",
+  "reason": "The answer's 2024 revenue ($2,865,507K) and 2022 revenue ($1,905.9M) match the expected figures. But it uses FY2021 as the base year and reports a CAGR of about 22.9%. That conflicts with the expected CAGR of 14.56%, which uses 2022 as the base, so it counts as a contradiction.",
+  "id": 9
+}

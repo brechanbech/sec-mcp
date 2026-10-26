@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "The total amount of directors compensations paid by 3D Systems in 2023 was $2,263,113.",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the figure and gives no number. It only points to where the figure should be, so it meets no criterion and contradicts nothing.",
+  "id": 12
+}

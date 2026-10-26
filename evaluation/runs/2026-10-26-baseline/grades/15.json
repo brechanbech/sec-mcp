@@ -1,0 +1,53 @@
+{
+  "criteria": [
+    {
+      "criterion": "Offering size 51,750,000 shares ($2.5875bn) plus 6,750,000-share over-allotment",
+      "met": false
+    },
+    {
+      "criterion": "Closing date March 7, 2025",
+      "met": false
+    },
+    {
+      "criterion": "Price $50.00 per share",
+      "met": false
+    },
+    {
+      "criterion": "Liquidation preference $50.00 per share plus accumulated and unpaid dividends",
+      "met": true
+    },
+    {
+      "criterion": "Dividend 6.25% per annum, payable quarterly Mar/Jun/Sep/Dec 1 from Jun 1, 2025 to Mar 1, 2028",
+      "met": false
+    },
+    {
+      "criterion": "No dividends on KKR common stock while Series D is outstanding",
+      "met": false
+    },
+    {
+      "criterion": "Mandatory conversion 0.3312-0.4140 shares on Mar 1, 2028 based on 20-day VWAP",
+      "met": false
+    },
+    {
+      "criterion": "Optional conversion at minimum rate before mandatory conversion date",
+      "met": false
+    },
+    {
+      "criterion": "Voting rights generally none, with exceptions",
+      "met": false
+    },
+    {
+      "criterion": "No optional redemption by KKR",
+      "met": false
+    },
+    {
+      "criterion": "Use of proceeds: acquire additional equity in core PE portfolio companies and general corporate purposes",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer meets only one criterion in full. It gives the $50.00 per share liquidation preference, though it leaves out the \"plus accumulated and unpaid dividends\" part, so this criterion is only loosely met. It gets some pieces of other criteria right but does not fully meet them: it states the 6.25% rate without the quarterly payment schedule, and it gives the March 1, 2028 date without the conversion rates. The closing date is only offered as a guess (about 7 March), and the price is called \"probably\" $50 without confirmation, so neither criterion is met. The answer says it could not find the offering size, voting rights, conversion terms, redemption terms or use of proceeds. Nothing in the answer conflicts with the expected answer.",
+  "id": 15
+}

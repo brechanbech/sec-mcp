@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "Q1 2024: $2,861 million (1.9% BEAT)",
+      "met": false
+    },
+    {
+      "criterion": "Q2 2024: $3,101 million (2.6% BEAT)",
+      "met": false
+    },
+    {
+      "criterion": "Q3 2024: $3,657 million (2.0% BEAT)",
+      "met": false
+    },
+    {
+      "criterion": "Q4 2024: $4,140 million (2.2% BEAT)",
+      "met": false
+    },
+    {
+      "criterion": "Average beat of 2.2% over the last 4 quarters",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": true,
+  "grade": "no_answer",
+  "reason": "The answer explicitly declines to give beat/miss figures or an average because it didn't find the actuals. It lists only implied guided gross profit, and it covers a different window (Q2'24–Q1'25) instead of Q1–Q4 2024. It gives no actual figures that conflict with the expected answer, so there's no contradiction. It meets none of the criteria.",
+  "id": 49
+}

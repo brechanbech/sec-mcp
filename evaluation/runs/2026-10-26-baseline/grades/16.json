@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "2022 - 13.3%",
+      "met": false
+    },
+    {
+      "criterion": "2023 - 13.5%",
+      "met": false
+    },
+    {
+      "criterion": "2024 - 13.6%",
+      "met": false
+    },
+    {
+      "criterion": "ABNB incrementally increased its take rate year over year from 2022 to 2024",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it couldn't calculate the take rate because it didn't find Gross Booking Value. It gives revenue only, with no take-rate figures and no comment on the trend. That meets no criterion. The revenue figures don't conflict with the expected answer.",
+  "id": 16
+}

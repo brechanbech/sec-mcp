@@ -1,0 +1,21 @@
+{
+  "criteria": [
+    {
+      "criterion": "0.7926 shares of Rocket Companies class A stock per share of Redfin",
+      "met": true
+    },
+    {
+      "criterion": "equity value of $1.75 billion",
+      "met": true
+    },
+    {
+      "criterion": "enterprise value of $2.4 billion",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer gets the 0.7926 Rocket Class A exchange ratio (with some hedging) and the $1.75B equity value right. It says it could not find the enterprise value, so the $2.4B criterion is not met. It mentions searching for \"$2.6 billion\" phrases without finding them, but it never claims that figure as the enterprise value, so that is not a contradiction. The $12.50 per-share headline value adds to the expected answer and does not conflict with it.",
+  "id": 35
+}

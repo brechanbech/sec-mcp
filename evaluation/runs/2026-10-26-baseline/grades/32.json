@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "$1.261 Billion Negative Impact to Net Income",
+      "met": false
+    },
+    {
+      "criterion": "10.7% decrease in Net Income",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer's main figures are a $1.56B hit and a 13.2% change, which conflict with the expected $1.261B and 10.7%. Its alternative 21% case gives $1.27B and 10.8%. That is close, but $1.271B does not match $1.261B to the precision given, and it is offered only as the secondary case. Because the main answer conflicts with the expected one, it counts as a contradiction.",
+  "id": 32
+}

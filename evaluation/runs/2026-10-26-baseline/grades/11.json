@@ -1,0 +1,49 @@
+{
+  "criteria": [
+    {
+      "criterion": "Q1 2025 guidance (USD): $25.0B to $25.4B",
+      "met": false
+    },
+    {
+      "criterion": "Q1 2025 guidance (NT$ at 32.9): 833,120",
+      "met": false
+    },
+    {
+      "criterion": "February to March revenue growth rate 2022: 17.0%",
+      "met": false
+    },
+    {
+      "criterion": "February to March revenue growth rate 2023: 10.9%",
+      "met": false
+    },
+    {
+      "criterion": "February to March revenue growth rate 2024: 7.5%",
+      "met": false
+    },
+    {
+      "criterion": "Average February to March growth rate: 4.5%",
+      "met": false
+    },
+    {
+      "criterion": "February 2025 revenue (NT$): 260,009",
+      "met": false
+    },
+    {
+      "criterion": "March 2025 revenue (estimate, NT$): 271,810",
+      "met": false
+    },
+    {
+      "criterion": "Q1 2025 estimate: 825,107",
+      "met": false
+    },
+    {
+      "criterion": "Q1 2025: -1.0% Miss",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": true,
+  "grade": "no_answer",
+  "reason": "The answer declines to make a beat/miss call, saying the guidance and monthly revenue figures it needed couldn't be found. It meets none of the criteria. It also frames the task around Q2 2025 guidance and the March-to-Q2 ratio, while the expected answer uses Q1 2025 guidance and February-to-March growth, so the period is mismatched. It states only full-year revenue figures, which don't conflict with the expected answer, and it asserts no beat or miss, so there is no contradiction.",
+  "id": 11
+}

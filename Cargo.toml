@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://codeberg.org/brechanbech/sec-mcp"
 homepage = "https://codeberg.org/brechanbech/sec-mcp"
 readme = "README.md"
-exclude = ["glama.json"]
+exclude = ["glama.json", "evaluation/"]
 keywords = ["mcp", "sec", "edgar", "finance", "claude"]
 categories = ["command-line-utilities", "api-bindings"]
 

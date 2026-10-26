@@ -1,0 +1,29 @@
+{
+  "criteria": [
+    {
+      "criterion": "Workday reports Gross Revenue Retention Rate",
+      "met": true
+    },
+    {
+      "criterion": "Gross Revenue Retention Rate definition: percentage of recurring revenue retained from existing customers",
+      "met": false
+    },
+    {
+      "criterion": "Gross Revenue Retention Rate calculation: compares total ARR of customers from prior period-end to current period-end",
+      "met": false
+    },
+    {
+      "criterion": "Gross Revenue Retention Rate accounts for recurring revenues lost to product or customer churn",
+      "met": false
+    },
+    {
+      "criterion": "Gross Revenue Retention Rate does not account for additional revenue from add-ons or net expansions",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer correctly says Workday reports a gross revenue retention rate. It says outright that it could not find the definition. Its guess that the definition involves \"recurring revenue lost\" is hedged and unconfirmed, so it doesn't meet any of the definition criteria. Nothing in the answer conflicts with the expected answer.",
+  "id": 17
+}

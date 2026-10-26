@@ -1,0 +1,73 @@
+{
+  "criteria": [
+    {
+      "criterion": "Average aircraft: 209.9",
+      "met": false
+    },
+    {
+      "criterion": "Aircraft at end of period: 213",
+      "met": false
+    },
+    {
+      "criterion": "Average daily aircraft utilization (hours): 9.9",
+      "met": false
+    },
+    {
+      "criterion": "Departures: 288,180",
+      "met": false
+    },
+    {
+      "criterion": "Passenger flight segments (PFSs): 44,180,000",
+      "met": false
+    },
+    {
+      "criterion": "Revenue passenger miles (RPMs): 43,671,009,000",
+      "met": false
+    },
+    {
+      "criterion": "Available seat miles (ASMs): 53,017,948,000",
+      "met": false
+    },
+    {
+      "criterion": "Load factor: 0.824",
+      "met": false
+    },
+    {
+      "criterion": "Total revenue per passenger flight segment: $111.21",
+      "met": false
+    },
+    {
+      "criterion": "Average yield (cents): $0.11",
+      "met": false
+    },
+    {
+      "criterion": "TRASM (cents): $0.93",
+      "met": false
+    },
+    {
+      "criterion": "CASM (cents): $0.11",
+      "met": false
+    },
+    {
+      "criterion": "Adjusted CASM (cents): $0.11",
+      "met": false
+    },
+    {
+      "criterion": "Adjusted CASM ex-fuel (cents): $0.80",
+      "met": false
+    },
+    {
+      "criterion": "Fuel gallons consumed: 551,819,000",
+      "met": false
+    },
+    {
+      "criterion": "Average fuel cost per gallon: $2.68",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer lists KPI names but says it could not find any FY 2024 values. Every criterion needs a figure, so none is met. It asserts no conflicting figures, so there is no contradiction.",
+  "id": 28
+}

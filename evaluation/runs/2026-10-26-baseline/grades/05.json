@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "AMZN FY 2025 capital expenditure guidance: $105.2 billion",
+      "met": false
+    },
+    {
+      "criterion": "GOOG FY 2025 capital expenditure guidance: $75.0 billion",
+      "met": true
+    },
+    {
+      "criterion": "META FY 2025 capital expenditure guidance: $62.5 billion",
+      "met": false
+    },
+    {
+      "criterion": "AMZN plans to spend the most on capital expenditures in 2025",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": false,
+  "grade": "wrong",
+  "reason": "The answer gets Alphabet's figure right: it gives about $75B, though it hedges on it. It found no figure for Amazon and doesn't say who spends the most. Its Meta figure is $64–72B, a midpoint of $68B, taken from the Q1 2025 release. That conflicts with the expected $62.5B midpoint, so it counts as a contradiction. The answer also suggests Alphabet may beat Meta, which leaves out Amazon. Because there is a contradiction, the grade is wrong.",
+  "id": 5
+}

@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Production expected to begin in 2025",
+      "met": false
+    }
+  ],
+  "contradiction": true,
+  "period_mismatch": true,
+  "grade": "wrong",
+  "reason": "The expected answer is that production was expected to begin in 2025. The answer instead says production started around mid-2024 and is not still pending. That timing conflicts with the expected 2025 start, and the answer never mentions 2025.",
+  "id": 22
+}

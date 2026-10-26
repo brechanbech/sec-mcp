@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Warner Discovery's Total Restructuring Costs as of Dec 31, 2024, were $4.7 Billion",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the figure and gives no number, so the $4.7B criterion is not met and nothing contradicts it.",
+  "id": 36
+}

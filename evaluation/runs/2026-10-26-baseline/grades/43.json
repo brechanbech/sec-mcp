@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "Asia Pacific - 3.3 Nights per Booking",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says the figure was not found and gives no value, so it meets no criterion and contradicts nothing.",
+  "id": 43
+}

@@ -1,0 +1,25 @@
+{
+  "criteria": [
+    {
+      "criterion": "Class A: 432,876,657 shares",
+      "met": false
+    },
+    {
+      "criterion": "Class B: 188,462,942 shares",
+      "met": false
+    },
+    {
+      "criterion": "Class C: 0",
+      "met": false
+    },
+    {
+      "criterion": "Class H: 9,200,000 shares",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says it could not find the share counts and gives no figures, so it meets no criterion and contradicts nothing.",
+  "id": 10
+}

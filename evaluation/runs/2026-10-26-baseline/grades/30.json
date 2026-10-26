@@ -1,0 +1,13 @@
+{
+  "criteria": [
+    {
+      "criterion": "BROS gross profit in 2026 is $467 million",
+      "met": true
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "correct",
+  "reason": "The answer gives 2026 gross profit of about $467M, which matches the expected answer. It gets there using FY2024 revenue of $1,281.0M, two years of 30% growth and a 500bps margin compression. Nothing in it conflicts with the expected answer, and it uses the right fiscal period.",
+  "id": 30
+}

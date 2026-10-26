@@ -1,0 +1,45 @@
+{
+  "criteria": [
+    {
+      "criterion": "2019: 10.82",
+      "met": false
+    },
+    {
+      "criterion": "2020: 10.91",
+      "met": false
+    },
+    {
+      "criterion": "2021: 11.67",
+      "met": false
+    },
+    {
+      "criterion": "2022: 11.76",
+      "met": false
+    },
+    {
+      "criterion": "2023: 11.64",
+      "met": false
+    },
+    {
+      "criterion": "2024: 11.70",
+      "met": false
+    },
+    {
+      "criterion": "From 2019-2022, ARPU increased approximately 2.8% annually",
+      "met": false
+    },
+    {
+      "criterion": "From 2022 to 2024, ARPU roughly flat",
+      "met": false
+    },
+    {
+      "criterion": "Flat from 2022 to 2024 likely due to lower priced ad plans",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says outright that it couldn't get the ARPU figures and gives no ARPU values or trend. It reports total revenue instead and says plainly that revenue is not a proxy for ARPU, so it makes no ARPU claim that could conflict with the expected answer. It meets no criteria and has no contradiction, so the grade is no_answer.",
+  "id": 1
+}

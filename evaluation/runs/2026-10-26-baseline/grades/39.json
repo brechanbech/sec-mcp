@@ -1,0 +1,37 @@
+{
+  "criteria": [
+    {
+      "criterion": "Provision for (benefit from) income taxes",
+      "met": true
+    },
+    {
+      "criterion": "Other income (expense), net",
+      "met": true
+    },
+    {
+      "criterion": "Interest income",
+      "met": true
+    },
+    {
+      "criterion": "Depreciation and amortization",
+      "met": true
+    },
+    {
+      "criterion": "Stock-based compensation expense",
+      "met": true
+    },
+    {
+      "criterion": "Acquisition-related impacts consisting of gains (losses) recognized on changes in the fair value of contingent consideration arrangements",
+      "met": false
+    },
+    {
+      "criterion": "Lodging taxes, withholding taxes, and transactional taxes with significant uncertainty on application to platform",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "partial",
+  "reason": "The answer names five of the expected adjustments: income taxes, other income (expense) net, interest income, depreciation and amortization, and stock-based compensation. It also says \"acquisition-related impacts,\" but leaves out the contingent consideration fair-value detail and even doubts that this item belongs in the reconciliation. It gives only \"lodging tax reserves,\" with nothing on withholding or transactional taxes where it is uncertain how the taxes apply to the platform, so those two criteria are not met. It also lists interest expense and restructuring charges, which are not in the expected answer. It says outright that these may not be reconciliation items, so I did not count them as a firm contradiction.",
+  "id": 39
+}

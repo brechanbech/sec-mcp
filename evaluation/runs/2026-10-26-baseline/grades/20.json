@@ -1,0 +1,17 @@
+{
+  "criteria": [
+    {
+      "criterion": "Shift4's merchant processing activity in North America is facilitated by one vendor.",
+      "met": false
+    },
+    {
+      "criterion": "The Company believes that this vendor maintains appropriate backup systems and alternative arrangements to avoid a significant disruption of the processing in the event of an unforeseen event.",
+      "met": false
+    }
+  ],
+  "contradiction": false,
+  "period_mismatch": false,
+  "grade": "no_answer",
+  "reason": "The answer says the information was not found. It notes the phrase \"one vendor\" appears in the FY2024 10-K, but it never says that North American merchant processing depends on one vendor. It also doesn't mention the vendor's backup arrangements. No criterion is met and nothing contradicts the expected answer.",
+  "id": 20
+}
