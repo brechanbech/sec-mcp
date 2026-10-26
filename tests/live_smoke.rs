@@ -440,6 +440,73 @@ fn live_smoke() {
         assets["next_offset"]
     );
 
+    // Filing text. The two answers Claude Desktop's own fetch could not reach in
+    // October 2026: guidance in an 8-K's exhibit, and a sentence ~170k
+    // characters into a 10-K. First, a filing with no document named lists its
+    // documents by type, which is how the exhibit is found at all.
+    let eight_k = server.call_tool(
+        "sec_filing_text",
+        json!({ "url": "https://www.sec.gov/Archives/edgar/data/1559720/000119312525109934/" }),
+    );
+    assert_eq!(eight_k["form"], "8-K", "{eight_k}");
+    let exhibit_url = eight_k["documents"]
+        .as_array()
+        .and_then(|docs| docs.iter().find(|d| d["type"] == "EX-99.1"))
+        .and_then(|d| d["url"].as_str())
+        .unwrap_or_else(|| panic!("no EX-99.1 in the 8-K's documents: {eight_k}"))
+        .to_string();
+    let letter = server.call_tool(
+        "sec_filing_text",
+        json!({ "url": exhibit_url, "find": "expect to generate revenue" }),
+    );
+    let guidance = letter["matches"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        guidance.contains("$2.99 billion to $3.05 billion"),
+        "Q2 2025 guidance in the shareholder letter: {letter}"
+    );
+    assert!(
+        letter["images"].as_u64().is_some_and(|n| n > 0),
+        "the letter's page images should be counted: {letter}"
+    );
+
+    let ten_k_url =
+        "https://www.sec.gov/Archives/edgar/data/1559720/000155972025000010/abnb-20241231.htm";
+    let first_page = server.call_tool("sec_filing_text", json!({ "url": ten_k_url }));
+    assert!(
+        first_page["text"]
+            .as_str()
+            .is_some_and(|t| t.len() <= 20_000),
+        "default page size: {}",
+        first_page["returned"]
+    );
+    let labels: Vec<&str> = first_page["sections"]
+        .as_array()
+        .map(|s| s.iter().filter_map(|x| x["label"].as_str()).collect())
+        .unwrap_or_default();
+    assert!(
+        labels.contains(&"Part I, Item 1A") && labels.contains(&"Part II, Item 7"),
+        "10-K section index: {labels:?}"
+    );
+    let risk = server.call_tool(
+        "sec_filing_text",
+        json!({ "url": ten_k_url, "section": "1A", "limit": 1000 }),
+    );
+    assert!(
+        risk["text"]
+            .as_str()
+            .is_some_and(|t| t.starts_with("Item 1A")),
+        "section 1A should start at its heading: {}",
+        risk["text"]
+    );
+    let apac = server.call_tool(
+        "sec_filing_text",
+        json!({ "url": ten_k_url, "find": "3.3 for Asia Pacific" }),
+    );
+    assert!(
+        apac["total_matches"].as_u64().is_some_and(|n| n >= 1),
+        "nights per booking by region: {apac}"
+    );
+
     // Full-text search. This is the one endpoint sec-mcp calls that SEC does not
     // document — `efts.sec.gov`, the API behind the EDGAR search UI — so it has
     // no stability guarantee and this assertion is the only thing that would
@@ -571,7 +638,7 @@ fn protocol_surface() {
     assert_eq!(result["cacheScope"], "private", "tools/list: {listed}");
 
     let tools = result["tools"].as_array().expect("tools array");
-    assert_eq!(tools.len(), 10, "expected 10 tools: {listed}");
+    assert_eq!(tools.len(), 11, "expected 11 tools: {listed}");
 
     // Named rather than merely counted: a count catches a tool vanishing but not
     // one being renamed, and the name is the part clients bind to.
@@ -580,6 +647,7 @@ fn protocol_surface() {
         "sec_company_facts",
         "sec_company_info",
         "sec_configure",
+        "sec_filing_text",
         "sec_financial_concept",
         "sec_full_text_search",
         "sec_insider_transactions",

@@ -8,6 +8,30 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
 
 ## [Unreleased]
 
+### Added
+- **`sec_filing_text` reads the text of filings and exhibits.** Until now every
+  tool returned structured XBRL or a URL. The prose was out of reach: guidance
+  in an earnings release, risk factors, KPI definitions, deal terms. It
+  accounted for most of the October 2026 Finance Agent Benchmark failures. MCP
+  clients cannot be relied on to fill the gap: Claude Desktop's own fetch read
+  only the first quarter of a 10-K.
+  - **What it reads.** HTML documents, inline XBRL and agent-prepared exhibits
+    alike, become plain text, each table row on one line with split `$`, `)`
+    and `%` cells rejoined.
+  - **Finding the right document.** Given a filing, it lists the documents by
+    type, so an 8-K's EX-99.1 press release can be found.
+  - **Navigating a long document.** The first page lists the section headings
+    (`Part I, Item 1A: Risk Factors`, `Item 2.02`). `section` reads one, `find`
+    returns matching passages with their offsets, and `offset` pages from any
+    point, 20,000 characters at a time by default.
+  - **Limits.** Images are counted, and the response says their text is not
+    extracted. Only `https://www.sec.gov/Archives/edgar/data/` URLs are
+    fetched, documents are capped at 25 MB, and recent documents are cached so
+    paging fetches once.
+  - **Dependency.** It adds html5ever's tokenizer: 10 crates, all pure Rust.
+  - **Design.** The design and the prototype measurements are in
+    `docs/filing-text-design.md`.
+
 ## [0.7.0] - 2026-10-26
 
 ### Added

@@ -1,6 +1,6 @@
 # Design: reading filing text (roadmap item 2)
 
-Status: proposed, 26 October 2026. Nothing here is implemented yet.
+Status: implemented as `sec_filing_text`, 26 October 2026. Proposed the same day as `sec_read_filing`; renamed to match the other tools, which name what they return.
 
 ## Why
 
@@ -23,7 +23,7 @@ approval. Most MCP clients have no such browser.
 
 ## The tool
 
-One new tool, `sec_read_filing` ("Read Filing Document"), taking sec-mcp to 11
+One new tool, `sec_filing_text` ("Filing Text"), taking sec-mcp to 11
 tools. It cannot be an extension of `sec_recent_filings`: reading is a
 different act from listing, with its own paging, and folding it in would make
 every listing call carry reading parameters.
@@ -181,8 +181,8 @@ extracted text:
 
 ## Open questions
 
-1. **Name.** `sec_read_filing`, or `sec_filing_text`?
-2. **Page size.** 20,000 characters is about 5,000 tokens. Larger pages mean
+1. **Name.** Settled: `sec_filing_text`.
+2. **Page size.** Settled: 20,000 characters, about 5,000 tokens. Larger pages mean
    fewer calls but more context spent per call.
 3. **Effort.** The prototype is about 250 lines. The tool with paging, `find`,
    the document list, cache, allowlist and tests should be roughly 600–800

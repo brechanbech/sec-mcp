@@ -6,8 +6,8 @@ committed work; the ordering reflects value-per-effort, not priority.
 
 Current scope is the four documented `data.sec.gov` APIs — submissions, XBRL
 company-concept, company-facts, and frames — plus the undocumented full-text
-search on `efts.sec.gov` and ownership XML from the Archives, surfaced as ten
-tools. Verified
+search on `efts.sec.gov`, and ownership XML and filing documents from the Archives,
+surfaced as eleven tools. Verified
 against SEC's [EDGAR APIs page](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 on 29 July 2026: all four are current, none deprecated, no auth required, 10
 req/sec, `User-Agent` mandatory. EDGAR Next (mandatory filer enrolment since
@@ -114,7 +114,7 @@ under us, so an assertion belongs there from day one.
 
 ## 2. Filing document retrieval
 
-**Design proposed 26 October 2026: [`filing-text-design.md`](filing-text-design.md).**
+**Done** (26 October 2026): `sec_filing_text`, designed in [`filing-text-design.md`](filing-text-design.md).
 
 `https://www.sec.gov/Archives/edgar/data/{cik}/{accession-nodash}/index.json`
 enumerates every document in a filing plus the XBRL zip (verified working).

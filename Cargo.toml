@@ -40,3 +40,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "1"
 dirs = "6"
+# Filing text (sec_filing_text). Agent-prepared exhibits are legacy HTML, not
+# XML, so roxmltree cannot read them. Only the tokenizer is used: 10 new crates,
+# all pure Rust and from the Servo project but `phf`; `tl` (one crate) has had no
+# release since January 2024.
+html5ever = "0.40"
