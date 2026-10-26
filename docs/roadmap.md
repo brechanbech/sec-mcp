@@ -155,6 +155,22 @@ caller can jump rather than page. HTML-to-text needs a new dependency, and it
 should be pure Rust, consistent with the crate's no-build-time-C stance beyond
 `ring`.
 
+**Can the client already read the URLs? Tested in Claude Desktop, 26 October
+2026.** Access is not the problem; size is. Its web fetch read only the first
+~120k of the FY2024 Airbnb 10-K's ~430k characters, stopping before the MD&A,
+so a benchmark question answered there (Asia Pacific nights per booking, 3.3)
+failed through fetch. It succeeded only by falling back to the app's built-in
+browser, after the user approved sec.gov there. The Q1 2025 earnings exhibit
+(`EX-99.1`, 56 KB of HTML) was read in full, and the chain from question to
+exhibit worked, also through the browser. Most MCP clients have no such
+browser. So the case for this item is that deep documents become reachable in
+any client, without a browser or an approval prompt. That is narrower than
+"the only way to read a filing", and it is what paging and a section index buy.
+
+That exhibit is also a shareholder letter with 27 full-page JPEGs beside its
+text. The guidance was in the text, but a text tool cannot see what a filer
+publishes only as images, and should say so rather than imply completeness.
+
 Precedent: edgar-audit-mcp (Python, a 12-tool server) ships
 `sec_edgar_read_filing_text`, and it is what lets its tool-only arm answer the
 qualitative and Beat or Miss questions. Here it would be one new tool, fed by
