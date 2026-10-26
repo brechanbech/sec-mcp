@@ -297,10 +297,15 @@ The same pattern as `sec_insider_transactions`: find the filing through
 submissions or full-text search, then read its `primary_doc.xml`. All three
 were confirmed as XML against live October 2026 filings.
 
-- **Form 144**, notice of a proposed sale by an insider. Electronic filing has
-  been mandatory since 13 April 2023 (namespace `http://www.sec.gov/edgar/ownership`).
-  It pairs with Forms 3/4/5, and a 144 often precedes a Form 4 sale, so it
-  **could extend `sec_insider_transactions`** rather than add a tool.
+- **Form 144**, notice of a proposed sale by an insider. **Done** (26 October
+  2026) as `form_type: "144"` on `sec_insider_transactions`, with no new tool.
+  Electronic filing has been mandatory since 13 April 2023 (namespace
+  `http://www.sec.gov/edgar/ownership`, but its own schema, not
+  `ownershipDocument`). It pairs with Forms 3/4/5: a 144 is filed when the order
+  is placed, and the Form 4 reporting the executed sale follows. The default
+  form filter stays 3, 4 and 5, so existing callers see no change. Notices are
+  parsed as filed: one of Tim Cook's (October 2026) values 218,078 shares at
+  $3.3M, and the tool reports that rather than correcting it.
 - **Schedules 13D and 13G**, holders above 5%. **Done** (26 October 2026) as
   `sec_beneficial_ownership`, a new tool rather than an extension of
   `sec_insider_transactions`: the filers, schemas and questions all differ.
@@ -318,7 +323,7 @@ were confirmed as XML against live October 2026 filings.
 **Effort: moderate per form**, but the parser and the `get_text` path exist
 already. 13D/13G was the most valuable of the three: it is the only free,
 structured answer to "who holds more than 5% of this company", the question
-item 4 cannot answer. Form 144 and Form D remain.
+item 4 cannot answer. Form D remains.
 
 ## Measuring: the Finance Agent Benchmark (recorded 26 October 2026)
 

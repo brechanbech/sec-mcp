@@ -36,7 +36,9 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 mod filing_text;
+mod form144;
 mod schedule13;
+mod xml;
 
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 const TICKER_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
@@ -680,9 +682,9 @@ struct InsiderTransactionsParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "u64", extend("default" = 0))]
     offset: Option<u64>,
-    /// Optional filter: '4' (changes in ownership — the usual choice), '3' (initial ownership, holdings only) or '5' (annual catch-up). Omit for all three.
+    /// Optional filter: '4' (changes in ownership — the usual choice), '3' (initial ownership, holdings only), '5' (annual catch-up) or '144' (notice of a proposed sale, filed before the Form 4 that reports it). Omit for forms 3, 4 and 5.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "String", extend("enum" = ["3", "4", "5"]))]
+    #[schemars(with = "String", extend("enum" = ["3", "4", "5", "144"]))]
     form_type: Option<String>,
 }
 
@@ -1942,10 +1944,14 @@ async fn handle_tool(state: &Arc<RwLock<State>>, name: &str, args: &Value) -> Re
             let mut filings: Vec<Value> = Vec::with_capacity(selected.len());
             for (form, filed, accession, primary_document) in selected {
                 let url = ownership_xml_url(&cik_num, &accession, &primary_document);
-                let parsed = client
-                    .get_text(&url)
-                    .await
-                    .and_then(|xml| parse_ownership_document(&xml));
+                // Form 144 shares the ownership namespace but not the schema.
+                let parsed = client.get_text(&url).await.and_then(|xml| {
+                    if form.starts_with("144") {
+                        form144::parse(&xml)
+                    } else {
+                        parse_ownership_document(&xml)
+                    }
+                });
 
                 match parsed {
                     Ok(mut doc) => {
@@ -2486,7 +2492,7 @@ impl SecMcp {
 
     #[tool(
         title = "Insider Transactions",
-        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true. Reads 5 filings by default and at most 10 per call; pass 'next_offset' back as 'offset' for older ones.",
+        description = "Get insider transactions (SEC Forms 3, 4 and 5) for a company by ticker — who bought or sold, when, how many shares and at what price, with each insider's name and role. Reads the filings themselves, so results include the SEC transaction code expanded into plain language and any explanatory footnotes: this matters because a 'F' is shares withheld to cover tax on vesting, not a market sale. Form 3 reports initial holdings rather than transactions, so its facts appear under 'holdings'; a Form 3 from an insider who owns nothing yet has empty holdings and 'no_securities_owned': true. With form_type '144', returns Form 144 notices instead: an affiliate's notice of a proposed sale, filed when the order is placed and before the Form 4 that reports the executed trade. Each gives the seller and their relationship to the company, the shares and market value to be sold, the broker and approximate date, how the shares were acquired, any Rule 10b5-1 plan adoption date, and sales in the past three months. A notice is an intent to sell, not a completed sale. Reads 5 filings by default and at most 10 per call; pass 'next_offset' back as 'offset' for older ones.",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn sec_insider_transactions(

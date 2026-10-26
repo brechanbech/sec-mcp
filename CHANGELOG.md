@@ -40,6 +40,16 @@ Releases before 0.4.2 are recorded only in the git tags (`v0.1.0`–`v0.4.1`).
     are listed with `structured: false` and a URL for `sec_filing_text`, not
     scraped.
   - **Tool count.** This takes sec-mcp to twelve tools.
+- **`sec_insider_transactions` reads Form 144** with `form_type: "144"`. A
+  Form 144 is an insider's notice of a proposed sale, filed when the order is
+  placed, before the Form 4 that reports the trade.
+  - **What it returns.** Each notice gives the seller and their relationship
+    to the company, the shares and market value to be sold, the broker,
+    exchange and approximate date, and how the shares were acquired. It also
+    gives any Rule 10b5-1 plan adoption date and the seller's sales in the past
+    three months.
+  - **Default unchanged.** Without `form_type` the tool still returns Forms 3,
+    4 and 5.
 
 ## [0.8.0] - 2026-10-26
 

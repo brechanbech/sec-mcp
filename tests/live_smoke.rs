@@ -423,6 +423,19 @@ fn live_smoke() {
         );
     }
 
+    // Form 144: Apple's officers file notices of proposed sales, usually
+    // several a month, each naming the seller and the shares to be sold.
+    let notices = server.call_tool(
+        "sec_insider_transactions",
+        json!({ "ticker": "AAPL", "form_type": "144", "limit": 2 }),
+    );
+    let notice = &notices["filings"][0];
+    assert_eq!(notice["form"], "144", "AAPL Form 144: {notices}");
+    assert!(
+        notice["seller"]["name"].is_string() && notice["proposed_sales"][0]["shares"].is_number(),
+        "a Form 144 names its seller and the shares to be sold: {notice}"
+    );
+
     // Schedules 13D and 13G. Apple's holders file 13Gs: the newest is XML with
     // a reporting person who owns a percentage of the class.
     let holders = server.call_tool(

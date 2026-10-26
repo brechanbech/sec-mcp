@@ -10,6 +10,8 @@
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
+use crate::xml::{iso_date, number, text};
+
 /// Item texts in a 13D run from a sentence to several pages. 4,000 characters
 /// holds most purposes whole and keeps a page of ten filings readable.
 const ITEM_TEXT_CAP: usize = 4_000;
@@ -88,40 +90,6 @@ fn rule_label(rule: &str) -> Option<&'static str> {
         "Rule 13d-1(d)" => "exempt investor, e.g. holding since before registration",
         _ => return None,
     })
-}
-
-/// Trimmed text of the first descendant named `tag`, or `None` if absent or
-/// blank.
-fn text(parent: roxmltree::Node, tag: &str) -> Option<String> {
-    let t = parent
-        .descendants()
-        .find(|n| n.has_tag_name(tag))?
-        .text()?
-        .trim();
-    (!t.is_empty()).then(|| t.to_owned())
-}
-
-/// A share count or percentage. Filers write `1099168953`, `0.00` and `7.48`;
-/// whole numbers are returned as integers so counts do not read as `1.0e9`.
-fn number(parent: roxmltree::Node, tag: &str) -> Value {
-    let Some(n) = text(parent, tag).and_then(|t| t.replace(',', "").parse::<f64>().ok()) else {
-        return Value::Null;
-    };
-    if n.fract() == 0.0 && n.abs() < 9.0e15 {
-        json!(n as i64)
-    } else {
-        json!(n)
-    }
-}
-
-/// `MM/DD/YYYY`, as the schedules write dates, to ISO 8601. Anything else is
-/// passed through unchanged rather than guessed at.
-fn iso_date(date: &str) -> String {
-    let parts: Vec<&str> = date.split('/').collect();
-    match parts.as_slice() {
-        [m, d, y] if m.len() == 2 && d.len() == 2 && y.len() == 4 => format!("{y}-{m}-{d}"),
-        _ => date.to_owned(),
-    }
 }
 
 /// Cap a free-text item, marking the cut so it does not read as the whole.
