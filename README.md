@@ -72,7 +72,7 @@ On your first SEC-related request Claude will explain that a contact email is re
 - *"Summarize the risk factors in Tesla's latest 10-K"*
 - *"Which companies had the highest revenue in 2024?"*
 
-## Available tools
+## Tools
 
 | Tool | Description |
 |------|-------------|
