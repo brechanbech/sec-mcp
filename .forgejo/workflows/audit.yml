@@ -18,6 +18,9 @@ jobs:
   advisories:
     # A light job — the smallest shared runner is plenty since nothing compiles.
     runs-on: codeberg-small-lazy
+    # A healthy run takes 1–2 minutes. Fail a hung one quickly instead of
+    # holding the runner until Codeberg kills it at about an hour.
+    timeout-minutes: 10
     container:
       # Node for the checkout JS action (see the release workflow for why). Rust
       # is installed below because `cargo-deny` shells out to `cargo metadata`,
