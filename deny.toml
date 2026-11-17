@@ -1,0 +1,10 @@
+# cargo-deny configuration. CI (.forgejo/workflows/audit.yml) runs only
+# `cargo-deny check advisories`; the other checks use cargo-deny's defaults.
+
+[advisories]
+ignore = [
+  # chrono is unmaintained, with no patched version. sec-mcp doesn't use it
+  # directly: it comes in through rmcp and schemars (still true as of rmcp
+  # 3.10.0 / schemars 1.2.3). Remove this entry once both drop chrono.
+  { id = "RUSTSEC-2026-0543", reason = "transitive via rmcp and schemars; no patched version" },
+]
